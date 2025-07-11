@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/dark_background"
+    tools:context=".ui.settings.SettingsActivity">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar_settings"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        app:title="Ajustes"
+        app:titleTextColor="@color/light_text"
+        app:navigationIcon="@drawable/ic_arrow_back"/>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                style="@style/SettingsHeader"
+                android:text="Reproducción" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/switch_autoplay"
+                style="@style/SettingsItem"
+                android:text="Auto-reproducir siguiente episodio"
+                app:drawableStartCompat="@drawable/ic_autoplay" />
+
+            <TextView
+                style="@style/SettingsHeader"
+                android:layout_marginTop="24dp"
+                android:text="Avanzado" />
+
+            <TextView
+                android:id="@+id/btn_user_agent"
+                style="@style/SettingsItem"
+                android:text="User-Agent"
+                app:drawableStartCompat="@drawable/ic_user_agent" />
+
+            <TextView
+                style="@style/SettingsHeader"
+                android:layout_marginTop="24dp"
+                android:text="Datos" />
+
+            <TextView
+                android:id="@+id/btn_clear_cache"
+                style="@style/SettingsItem"
+                android:text="Limpiar caché de contenido"
+                app:drawableStartCompat="@drawable/ic_cache" />
+
+            <TextView
+                style="@style/SettingsHeader"
+                android:layout_marginTop="24dp"
+                android:text="Cuenta" />
+
+            <TextView
+                android:id="@+id/btn_logout"
+                style="@style/SettingsItem"
+                android:text="Cerrar Sesión"
+                android:textColor="@color/red_accent"
+                app:drawableStartCompat="@drawable/ic_logout"
+                app:drawableTint="@color/red_accent" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

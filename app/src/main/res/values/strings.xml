@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Play</string>
+    <string name="next_episode_countdown">Siguiente episodio en %d…</string>
+    <string name="disabled">Desactivado</string>
+    <string name="audio_and_subtitles">Audio y Subtítulos</string>
+    <string name="end_of_season">Fin de la temporada</string>
+    <string name="close">Cerrar</string>
+    <string name="previous">Anterior</string>
+    <string name="next">Siguiente</string>
+    <string name="aspect_ratio">Aspect Ratio</string>
+    <string name="fullscreen">Pantalla Completa</string>
+    <string name="play">Reproducir</string>
+    <string name="pause">Pausar</string>
+    <string name="next_episode">Siguiente Episodio</string>
+    <string name="picture_in_picture">Picture-in-Picture</string>
+    <string name="rewind">Retroceder</string>
+    <string name="fast_forward">Avanzar</string>
+    <string name="rewind_10_seconds">Retroceder 10 segundos</string>
+    <string name="forward_10_seconds">Avanzar 10 segundos</string>
+    <string name="episode_number_format">%d.</string>
+</resources>
+
+

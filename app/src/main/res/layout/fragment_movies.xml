@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_background"
+    tools:context=".ui.movies.MoviesFragment">
+
+    <LinearLayout
+        android:id="@+id/controls_container_movies"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <Spinner
+            android:id="@+id/spinner_movie_categories"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="16dp"
+            android:visibility="gone"
+            android:backgroundTint="@color/light_text"/>
+
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/search_view_movies"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/search_view_bg"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark" />
+    </LinearLayout>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_view_movies"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/controls_container_movies"
+        android:padding="4dp"
+        android:visibility="gone"/>
+
+    <com.facebook.shimmer.ShimmerFrameLayout
+        android:id="@+id/shimmer_view_container_movies"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/controls_container_movies">
+        <GridLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:columnCount="3"
+            android:orientation="horizontal">
+            <include layout="@layout/placeholder_grid_item" />
+            <include layout="@layout/placeholder_grid_item" />
+            <include layout="@layout/placeholder_grid_item" />
+            <include layout="@layout/placeholder_grid_item" />
+            <include layout="@layout/placeholder_grid_item" />
+            <include layout="@layout/placeholder_grid_item" />
+        </GridLayout>
+    </com.facebook.shimmer.ShimmerFrameLayout>
+
+    <!-- CORREGIDO: Añadido el ID al include -->
+    <include
+        android:id="@+id/empty_state_container"
+        layout="@layout/empty_state_layout"/>
+
+</RelativeLayout>

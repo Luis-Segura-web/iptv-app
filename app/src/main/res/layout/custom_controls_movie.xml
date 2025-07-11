@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageButton
+        android:id="@+id/btn_close"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_arrow_back"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_margin="16dp"
+        app:tint="@color/white"
+        android:contentDescription="@string/close" />
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@id/exo_rew"
+            style="@style/ExoMediaButton.Rewind"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="@string/rewind"/>
+
+        <ImageButton
+            android:id="@id/exo_play"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/play"/>
+
+        <ImageButton
+            android:id="@id/exo_pause"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/pause"/>
+
+        <ImageButton
+            android:id="@id/exo_ffwd"
+            style="@style/ExoMediaButton.FastForward"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:contentDescription="@string/fast_forward"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:gravity="center_vertical"
+        android:padding="16dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@id/exo_position"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"/>
+
+        <androidx.media3.ui.DefaultTimeBar
+            android:id="@id/exo_progress"
+            android:layout_width="0dp"
+            android:layout_height="26dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@id/exo_duration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@android:color/white"/>
+
+        <ImageButton
+            android:id="@+id/btn_pip"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_pip"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="16dp"
+            android:contentDescription="@string/picture_in_picture"
+            app:tint="@color/white"/>
+
+        <ImageButton
+            android:id="@+id/btn_aspect_ratio"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_aspect_ratio"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="16dp"
+            android:contentDescription="@string/aspect_ratio"
+            app:tint="@color/white"/>
+
+        <ImageButton
+            android:id="@+id/btn_tracks"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_subtitles"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="16dp"
+            android:contentDescription="@string/audio_and_subtitles"
+            android:visibility="gone"
+            tools:visibility="visible"/>
+
+        <ImageButton
+            android:id="@+id/btn_fullscreen"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_fullscreen"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginStart="16dp"
+            android:contentDescription="@string/fullscreen" />
+    </LinearLayout>
+
+</RelativeLayout>
