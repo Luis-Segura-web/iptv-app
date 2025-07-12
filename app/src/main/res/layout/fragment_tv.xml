@@ -1,51 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/dark_background"
     tools:context=".ui.tv.TvFragment">
 
-    <LinearLayout
-        android:id="@+id/controls_container"
+    <!-- Barra de herramientas superior -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
-        <Spinner
-            android:id="@+id/spinnerCategories"
+        android:background="@color/dark_surface">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar_tv"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:backgroundTint="@color/light_text"/>
-    </LinearLayout>
+            android:layout_height="?attr/actionBarSize"
+            app:title="TV en Vivo"
+            app:titleTextColor="@color/light_text">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewContent"
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:orientation="horizontal">
+
+                <ImageButton
+                    android:id="@+id/btn_search_tv"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Buscar"
+                    android:src="@drawable/ic_search"
+                    app:tint="@color/light_text" />
+
+                <ImageButton
+                    android:id="@+id/btn_settings_tv"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Ajustes"
+                    android:src="@drawable/ic_settings"
+                    app:tint="@color/light_text" />
+            </LinearLayout>
+        </androidx.appcompat.widget.Toolbar>
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Contenido principal que se puede deslizar -->
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/controls_container"
-        android:visibility="gone"/>
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <com.facebook.shimmer.ShimmerFrameLayout
-        android:id="@+id/shimmer_view_container"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/controls_container">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
-            <include layout="@layout/placeholder_list_item" />
-            <include layout="@layout/placeholder_list_item" />
-            <include layout="@layout/placeholder_list_item" />
-            <include layout="@layout/placeholder_list_item" />
-            <include layout="@layout/placeholder_list_item" />
+
+            <!-- Contenedor del Reproductor de Video -->
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/player_view_tv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="220dp"
+                app:resize_mode="fit"
+                app:use_controller="true"
+                app:controller_layout_id="@layout/custom_player_controls"
+                android:background="#000000"/>
+
+            <!-- Lista de Categorías y Canales -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_view_tv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                tools:listitem="@layout/item_tv_category" />
+
+            <ProgressBar
+                android:id="@+id/progress_bar_tv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="24dp"
+                android:visibility="gone" />
+
         </LinearLayout>
-    </com.facebook.shimmer.ShimmerFrameLayout>
+    </androidx.core.widget.NestedScrollView>
 
-    <!-- CORREGIDO: Añadido el ID al include -->
-    <include
-        android:id="@+id/empty_state_container"
-        layout="@layout/empty_state_layout"/>
-
-</RelativeLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
