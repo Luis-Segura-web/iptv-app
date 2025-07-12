@@ -24,4 +24,13 @@
         android:textSize="16sp"
         android:layout_marginTop="16dp"/>
 
+    <!-- BOTÓN DE REINTENTO AÑADIDO -->
+    <Button
+        android:id="@+id/btn_retry"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Reintentar"
+        android:visibility="gone"/>
+
 </LinearLayout>

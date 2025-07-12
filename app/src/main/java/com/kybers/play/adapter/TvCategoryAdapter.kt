@@ -1,19 +1,16 @@
 package com.kybers.play.adapter
 
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
-import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.kybers.play.R
 import com.kybers.play.api.Category
 import com.kybers.play.api.LiveStream
-import com.kybers.play.databinding.ItemContentBinding
 import com.kybers.play.databinding.ItemTvCategoryBinding
+import com.kybers.play.databinding.ItemTvChannelBinding
+import com.kybers.play.manager.LiveFavoritesManager
 
-// Modelo de datos para el adaptador
 data class CategoryWithChannels(
     val category: Category,
     val channels: List<LiveStream>,
@@ -21,8 +18,8 @@ data class CategoryWithChannels(
 )
 
 class TvCategoryAdapter(
-    private val onCategoryClick: (CategoryWithChannels) -> Unit,
-    private val onChannelClick: (LiveStream) -> Unit
+    private val onChannelClick: (LiveStream) -> Unit,
+    private val onFavoriteClick: (LiveStream) -> Unit // Nuevo listener para favoritos
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private val items = mutableListOf<Any>()
@@ -64,7 +61,8 @@ class TvCategoryAdapter(
                 CategoryViewHolder(binding)
             }
             TYPE_CHANNEL -> {
-                val binding = ItemContentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+                // CORREGIDO: Usamos el nuevo layout para los canales
+                val binding = ItemTvChannelBinding.inflate(LayoutInflater.from(parent.context), parent, false)
                 ChannelViewHolder(binding)
             }
             else -> throw IllegalArgumentException("Invalid view type")
@@ -87,18 +85,31 @@ class TvCategoryAdapter(
             itemView.setOnClickListener {
                 categoryItem.isExpanded = !categoryItem.isExpanded
                 rebuildItemList()
-                onCategoryClick(categoryItem)
             }
         }
     }
 
-    inner class ChannelViewHolder(private val binding: ItemContentBinding) : RecyclerView.ViewHolder(binding.root) {
+    // CORREGIDO: ViewHolder para usar el nuevo layout y manejar favoritos
+    inner class ChannelViewHolder(private val binding: ItemTvChannelBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(channel: LiveStream) {
-            binding.tvName.text = channel.name
+            binding.tvChannelName.text = channel.name
             Glide.with(itemView.context)
                 .load(channel.streamIcon)
                 .placeholder(R.drawable.ic_tv)
-                .into(binding.ivIcon)
+                .into(binding.ivChannelIcon)
+
+            // Actualizar el icono de favorito
+            val isFavorite = LiveFavoritesManager.isFavorite(itemView.context, channel)
+            binding.btnFavorite.setImageResource(
+                if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+            )
+
+            // Listener para el botón de favorito
+            binding.btnFavorite.setOnClickListener {
+                onFavoriteClick(channel)
+            }
+
+            // Listener para toda la fila (para reproducir)
             itemView.setOnClickListener {
                 onChannelClick(channel)
             }

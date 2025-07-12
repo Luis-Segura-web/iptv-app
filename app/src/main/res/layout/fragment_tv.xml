@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/tv_fragment_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/dark_background"
@@ -12,6 +13,7 @@
         android:id="@+id/app_bar_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
         android:background="@color/dark_surface">
 
         <androidx.appcompat.widget.Toolbar
@@ -48,45 +50,87 @@
         </androidx.appcompat.widget.Toolbar>
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Contenido principal que se puede deslizar -->
-    <androidx.core.widget.NestedScrollView
+    <!-- Contenedor fijo para el reproductor y el título -->
+    <LinearLayout
+        android:id="@+id/player_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        android:layout_height="wrap_content"
+        android:layout_below="@id/app_bar_layout"
+        android:orientation="vertical"
+        android:background="@color/black">
 
-        <LinearLayout
+        <androidx.media3.ui.PlayerView
+            android:id="@+id/player_view_tv"
+            android:layout_width="match_parent"
+            android:layout_height="220dp"
+            app:resize_mode="fit"
+            app:use_controller="true"
+            app:controller_layout_id="@layout/custom_player_controls"
+            android:background="#000000"/>
+
+        <TextView
+            android:id="@+id/tv_now_playing_channel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:padding="12dp"
+            android:textColor="@color/light_text"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="@color/dark_surface"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="Reproduciendo: Nombre del Canal"/>
+    </LinearLayout>
 
-            <!-- Contenedor del Reproductor de Video -->
-            <androidx.media3.ui.PlayerView
-                android:id="@+id/player_view_tv"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="220dp"
-                app:resize_mode="fit"
-                app:use_controller="true"
-                app:controller_layout_id="@layout/custom_player_controls"
-                android:background="#000000"/>
+    <!-- Lista de canales -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_view_tv"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/player_container"
+        android:padding="8dp"
+        tools:listitem="@layout/item_tv_category" />
 
-            <!-- Lista de Categorías y Canales -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/recycler_view_tv"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false"
-                tools:listitem="@layout/item_tv_category" />
+    <!-- CORREGIDO: Contenido de empty_state_layout.xml incrustado directamente -->
+    <LinearLayout
+        android:id="@+id/empty_state_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_below="@id/player_container"
+        android:gravity="center"
+        android:visibility="gone">
 
-            <ProgressBar
-                android:id="@+id/progress_bar_tv"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginTop="24dp"
-                android:visibility="gone" />
+        <ImageView
+            android:id="@+id/iv_empty_icon"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@drawable/ic_no_internet"
+            app:tint="@color/dark_text" />
 
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
+        <TextView
+            android:id="@+id/tv_empty_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Error al cargar el contenido."
+            android:textColor="@color/dark_text"
+            android:textSize="16sp"
+            android:layout_marginTop="16dp"/>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+        <Button
+            android:id="@+id/btn_retry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Reintentar"
+            android:visibility="gone"/>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progress_bar_tv"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:visibility="gone" />
+
+</RelativeLayout>
