@@ -17,8 +17,6 @@ import android.view.WindowManager
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.ProgressBar
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
@@ -31,21 +29,21 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.kybers.play.api.Episode
 import com.kybers.play.api.LiveStream
 import com.kybers.play.api.Movie
+import com.kybers.play.api.PlayableContent
 import com.kybers.play.databinding.ActivityPlayerBinding
 import com.kybers.play.manager.HistoryItem
 import com.kybers.play.manager.HistoryManager
@@ -67,6 +65,8 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private var isFullscreen = false
     private var currentResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
     private var startPosition: Long = 0L
+
+    private var currentContent: PlayableContent? = null
 
     private var countdownTimer: CountDownTimer? = null
     private lateinit var audioManager: AudioManager
@@ -90,8 +90,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         itemType = intent.getStringExtra(EXTRA_ITEM_TYPE)
-
-        binding.playerView.setControllerLayoutId(R.layout.custom_player_controls)
 
         val playlistJson = intent.getStringExtra(EXTRA_PLAYLIST_JSON)
         currentIndex = intent.getIntExtra(EXTRA_CURRENT_INDEX, -1)
@@ -137,9 +135,11 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
         if (type == "movie") {
             val item = gson.fromJson(itemJson, Movie::class.java)
+            currentContent = item
             playbackUrl = "$serverUrl/movie/$username/$password/${item.streamId}.${item.containerExtension}"
             title = item.name
-            HistoryManager.addItemToHistory(this, item)
+            val historyItem = HistoryItem(item, 0, 0)
+            HistoryManager.addItemToHistory(this, historyItem)
         }
 
         binding.tvContentTitle.text = title
@@ -150,6 +150,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         if (livePlaylist.isEmpty() || index < 0 || index >= livePlaylist.size) return
         currentIndex = index
         val item = livePlaylist[currentIndex]
+        currentContent = item
 
         val sharedPrefs = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
         val serverUrl = sharedPrefs.getString("SERVER_URL", "")!!
@@ -159,7 +160,8 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val playbackUrl = "$serverUrl/live/$username/$password/${item.streamId}.m3u8"
         binding.tvContentTitle.text = item.name
 
-        HistoryManager.addItemToHistory(this, item)
+        val historyItem = HistoryItem(item, 0, 0)
+        HistoryManager.addItemToHistory(this, historyItem)
         initializePlayer(playbackUrl)
     }
 
@@ -167,6 +169,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         if (seriesPlaylist.isEmpty() || index < 0 || index >= seriesPlaylist.size) return
         currentIndex = index
         val item = seriesPlaylist[currentIndex]
+        // currentContent = item // No se puede asignar directamente
 
         val sharedPrefs = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
         val serverUrl = sharedPrefs.getString("SERVER_URL", "")!!
@@ -313,8 +316,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
             if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
                 audioGroupIndex = groupIndex
                 for (i in 0 until trackGroup.length) {
-                    val format = trackGroup.getFormat(i)
+                    // CORREGIDO: Se usa getTrackFormat en lugar de getFormat
+                    val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
+                    // CORREGIDO: Se usa 'it' correctamente dentro del bloque 'let'
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Audio #${i + 1}"
                     val radioButton = RadioButton(this).apply { text = label; id = i }
                     if (trackGroup.isTrackSelected(i)) {
@@ -325,8 +330,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
             } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
                 subtitleGroupIndex = groupIndex
                 for (i in 0 until trackGroup.length) {
-                    val format = trackGroup.getFormat(i)
+                    // CORREGIDO: Se usa getTrackFormat en lugar de getFormat
+                    val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
+                    // CORREGIDO: Se usa 'it' correctamente dentro del bloque 'let'
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Subtítulos #${i + 1}"
                     val radioButton = RadioButton(this).apply { text = label; id = i }
                     if (trackGroup.isTrackSelected(i)) {
@@ -551,10 +558,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     }
 
     private fun showIndicator(isBrightness: Boolean, progress: Int) {
-        val indicator = if (isBrightness) binding.brightnessIndicator else binding.volumeIndicator
-        val icon = indicator.indicatorIcon
-        val progressBar = indicator.indicatorProgress
-        val indicatorView = indicator.root
+        val indicatorLayout = if (isBrightness) binding.brightnessIndicator else binding.volumeIndicator
+        val icon = indicatorLayout.indicatorIcon
+        val progressBar = indicatorLayout.indicatorProgress
+        val indicatorView = indicatorLayout.root
 
         icon.setImageResource(if (isBrightness) R.drawable.ic_brightness else R.drawable.ic_volume)
         progressBar.progress = progress

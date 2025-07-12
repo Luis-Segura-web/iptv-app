@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace = "com.kybers.play"
-    compileSdk = 34
+    compileSdk = 34 // AJUSTADO para máxima compatibilidad
 
     defaultConfig {
         applicationId = "com.kybers.play"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 34 // AJUSTADO para máxima compatibilidad
         versionCode = 1
         versionName = "1.0"
 
@@ -29,7 +29,7 @@ android {
     }
 
     kotlin {
-        jvmToolchain(8)
+        jvmToolchain(21)
     }
 
     buildFeatures {
@@ -64,7 +64,7 @@ dependencies {
     // ExoPlayer
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
-    implementation(libs.androidx.media3.exoplayer.hls) // LÍNEA IMPORTANTE
+    implementation(libs.androidx.media3.exoplayer.hls)
 
     // Retrofit
     implementation(libs.retrofit)
