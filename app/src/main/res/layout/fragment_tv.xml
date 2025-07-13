@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/tv_fragment_root"
@@ -8,13 +8,12 @@
     android:background="@color/dark_background"
     tools:context=".ui.tv.TvFragment">
 
-    <!-- Barra de herramientas superior -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/app_bar_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:background="@color/dark_surface">
+        android:background="@color/dark_surface"
+        android:fitsSystemWindows="true">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar_tv"
@@ -48,89 +47,98 @@
                     app:tint="@color/light_text" />
             </LinearLayout>
         </androidx.appcompat.widget.Toolbar>
-    </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Contenedor fijo para el reproductor y el título -->
-    <LinearLayout
-        android:id="@+id/player_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/app_bar_layout"
-        android:orientation="vertical"
-        android:background="@color/black">
-
-        <androidx.media3.ui.PlayerView
-            android:id="@+id/player_view_tv"
+        <FrameLayout
+            android:id="@+id/player_container"
             android:layout_width="match_parent"
-            android:layout_height="220dp"
-            app:resize_mode="fit"
-            app:use_controller="true"
-            app:controller_layout_id="@layout/custom_player_controls"
-            android:background="#000000"/>
+            android:layout_height="wrap_content"
+            android:background="@color/black">
+
+            <androidx.media3.ui.PlayerView
+                android:id="@+id/player_view_tv"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                app:controller_layout_id="@layout/custom_player_controls"
+                app:resize_mode="fit"
+                app:use_controller="true" />
+
+            <ProgressBar
+                android:id="@+id/player_buffering"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone"
+                tools:visibility="visible" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/tv_now_playing_channel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@color/dark_surface"
             android:padding="12dp"
             android:textColor="@color/light_text"
             android:textSize="16sp"
             android:textStyle="bold"
-            android:background="@color/dark_surface"
             android:visibility="gone"
-            tools:visibility="visible"
-            tools:text="Reproduciendo: Nombre del Canal"/>
-    </LinearLayout>
+            tools:text="Reproduciendo: Nombre del Canal"
+            tools:visibility="visible" />
 
-    <!-- Lista de canales -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler_view_tv"
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/player_container"
-        android:padding="8dp"
-        tools:listitem="@layout/item_tv_category" />
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <!-- CORREGIDO: Contenido de empty_state_layout.xml incrustado directamente -->
-    <LinearLayout
-        android:id="@+id/empty_state_layout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:layout_below="@id/player_container"
-        android:gravity="center"
-        android:visibility="gone">
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_view_tv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="8dp"
+            tools:listitem="@layout/item_tv_category" />
 
-        <ImageView
-            android:id="@+id/iv_empty_icon"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:src="@drawable/ic_no_internet"
-            app:tint="@color/dark_text" />
+        <LinearLayout
+            android:id="@+id/empty_state_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/tv_empty_message"
+            <ImageView
+                android:id="@+id/iv_empty_icon"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/ic_no_internet"
+                app:tint="@color/dark_text" />
+
+            <TextView
+                android:id="@+id/tv_empty_message"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Error al cargar el contenido."
+                android:textColor="@color/dark_text"
+                android:textSize="16sp" />
+
+            <Button
+                android:id="@+id/btn_retry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Reintentar"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progress_bar_tv"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Error al cargar el contenido."
-            android:textColor="@color/dark_text"
-            android:textSize="16sp"
-            android:layout_marginTop="16dp"/>
+            android:layout_gravity="center"
+            android:visibility="gone" />
 
-        <Button
-            android:id="@+id/btn_retry"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Reintentar"
-            android:visibility="gone"/>
-    </LinearLayout>
+    </FrameLayout>
 
-    <ProgressBar
-        android:id="@+id/progress_bar_tv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
-        android:visibility="gone" />
-
-</RelativeLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

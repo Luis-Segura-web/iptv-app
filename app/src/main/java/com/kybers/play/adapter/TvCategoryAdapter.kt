@@ -1,6 +1,7 @@
 package com.kybers.play.adapter
 
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -11,6 +12,14 @@ import com.kybers.play.databinding.ItemTvCategoryBinding
 import com.kybers.play.databinding.ItemTvChannelBinding
 import com.kybers.play.manager.LiveFavoritesManager
 
+// Interfaz para que el adaptador se comunique con el exterior
+interface StickyHeaderInterface {
+    fun getHeaderPositionForItem(itemPosition: Int): Int
+    fun getHeaderLayout(headerPosition: Int): Int
+    fun bindHeaderData(header: View, headerPosition: Int)
+    fun isHeader(itemPosition: Int): Boolean
+}
+
 data class CategoryWithChannels(
     val category: Category,
     val channels: List<LiveStream>,
@@ -19,35 +28,40 @@ data class CategoryWithChannels(
 
 class TvCategoryAdapter(
     private val onChannelClick: (LiveStream) -> Unit,
-    private val onFavoriteClick: (LiveStream) -> Unit // Nuevo listener para favoritos
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private val onFavoriteClick: (LiveStream) -> Unit,
+    private val onCategoryToggled: (position: Int) -> Unit
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>(), StickyHeaderInterface {
 
-    private val items = mutableListOf<Any>()
-    private var categoriesWithChannels = listOf<CategoryWithChannels>()
+    private val dataList = mutableListOf<Any>()
+    private var categoriesWithChannels = mutableListOf<CategoryWithChannels>()
 
     companion object {
-        private const val TYPE_CATEGORY = 0
-        private const val TYPE_CHANNEL = 1
+        const val TYPE_CATEGORY = 0
+        const val TYPE_CHANNEL = 1
     }
 
     fun submitList(list: List<CategoryWithChannels>) {
-        categoriesWithChannels = list
-        rebuildItemList()
+        categoriesWithChannels.clear()
+        categoriesWithChannels.addAll(list)
+        rebuildAndNotify()
     }
 
-    private fun rebuildItemList() {
-        items.clear()
+    private fun rebuildAndNotify() {
+        val oldDataSize = dataList.size
+        dataList.clear()
+        notifyItemRangeRemoved(0, oldDataSize)
+
         categoriesWithChannels.forEach { categoryItem ->
-            items.add(categoryItem)
+            dataList.add(categoryItem)
             if (categoryItem.isExpanded) {
-                items.addAll(categoryItem.channels)
+                dataList.addAll(categoryItem.channels)
             }
         }
-        notifyDataSetChanged()
+        notifyItemRangeInserted(0, dataList.size)
     }
 
     override fun getItemViewType(position: Int): Int {
-        return when (items[position]) {
+        return when (dataList[position]) {
             is CategoryWithChannels -> TYPE_CATEGORY
             is LiveStream -> TYPE_CHANNEL
             else -> throw IllegalArgumentException("Invalid type of data at position $position")
@@ -56,63 +70,85 @@ class TvCategoryAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
-            TYPE_CATEGORY -> {
-                val binding = ItemTvCategoryBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-                CategoryViewHolder(binding)
-            }
-            TYPE_CHANNEL -> {
-                // CORREGIDO: Usamos el nuevo layout para los canales
-                val binding = ItemTvChannelBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-                ChannelViewHolder(binding)
-            }
+            TYPE_CATEGORY -> CategoryViewHolder(ItemTvCategoryBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+            TYPE_CHANNEL -> ChannelViewHolder(ItemTvChannelBinding.inflate(LayoutInflater.from(parent.context), parent, false))
             else -> throw IllegalArgumentException("Invalid view type")
         }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (holder) {
-            is CategoryViewHolder -> holder.bind(items[position] as CategoryWithChannels)
-            is ChannelViewHolder -> holder.bind(items[position] as LiveStream)
+            is CategoryViewHolder -> holder.bind(dataList[position] as CategoryWithChannels)
+            is ChannelViewHolder -> holder.bind(dataList[position] as LiveStream)
         }
     }
 
-    override fun getItemCount(): Int = items.size
+    override fun getItemCount(): Int = dataList.size
 
+    // --- Implementación de StickyHeaderInterface ---
+    override fun getHeaderPositionForItem(itemPosition: Int): Int {
+        var headerPosition = 0
+        var currentPosition = itemPosition
+        do {
+            if (isHeader(currentPosition)) {
+                headerPosition = currentPosition
+                break
+            }
+            currentPosition -= 1
+        } while (currentPosition >= 0)
+        return headerPosition
+    }
+
+    override fun getHeaderLayout(headerPosition: Int): Int = R.layout.item_tv_category
+
+    override fun bindHeaderData(header: View, headerPosition: Int) {
+        val categoryItem = dataList[headerPosition] as CategoryWithChannels
+        header.findViewById<android.widget.TextView>(R.id.tv_category_name).text = categoryItem.category.categoryName
+    }
+
+    override fun isHeader(itemPosition: Int): Boolean {
+        if (itemPosition < 0 || itemPosition >= dataList.size) return false
+        return dataList[itemPosition] is CategoryWithChannels
+    }
+
+    // --- ViewHolders ---
     inner class CategoryViewHolder(private val binding: ItemTvCategoryBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(categoryItem: CategoryWithChannels) {
             binding.tvCategoryName.text = categoryItem.category.categoryName
             binding.ivExpandArrow.rotation = if (categoryItem.isExpanded) 180f else 0f
+
             itemView.setOnClickListener {
-                categoryItem.isExpanded = !categoryItem.isExpanded
-                rebuildItemList()
+                val clickedPosition = bindingAdapterPosition
+                if (clickedPosition == RecyclerView.NO_POSITION) return@setOnClickListener
+
+                val currentlyExpanded = categoryItem.isExpanded
+
+                // Cerrar cualquier otra categoría que esté abierta
+                var previouslyExpandedPosition = -1
+                categoriesWithChannels.forEachIndexed { index, item ->
+                    if (item.isExpanded) {
+                        previouslyExpandedPosition = dataList.indexOf(item)
+                        item.isExpanded = false
+                    }
+                }
+
+                // Expandir o contraer la categoría actual
+                categoryItem.isExpanded = !currentlyExpanded
+
+                rebuildAndNotify()
+                onCategoryToggled(clickedPosition)
             }
         }
     }
 
-    // CORREGIDO: ViewHolder para usar el nuevo layout y manejar favoritos
     inner class ChannelViewHolder(private val binding: ItemTvChannelBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(channel: LiveStream) {
             binding.tvChannelName.text = channel.name
-            Glide.with(itemView.context)
-                .load(channel.streamIcon)
-                .placeholder(R.drawable.ic_tv)
-                .into(binding.ivChannelIcon)
-
-            // Actualizar el icono de favorito
+            Glide.with(itemView.context).load(channel.streamIcon).placeholder(R.drawable.ic_tv).into(binding.ivChannelIcon)
             val isFavorite = LiveFavoritesManager.isFavorite(itemView.context, channel)
-            binding.btnFavorite.setImageResource(
-                if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
-            )
-
-            // Listener para el botón de favorito
-            binding.btnFavorite.setOnClickListener {
-                onFavoriteClick(channel)
-            }
-
-            // Listener para toda la fila (para reproducir)
-            itemView.setOnClickListener {
-                onChannelClick(channel)
-            }
+            binding.btnFavorite.setImageResource(if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border)
+            binding.btnFavorite.setOnClickListener { onFavoriteClick(channel) }
+            itemView.setOnClickListener { onChannelClick(channel) }
         }
     }
 }

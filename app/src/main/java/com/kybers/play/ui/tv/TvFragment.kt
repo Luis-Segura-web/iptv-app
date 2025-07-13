@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.RelativeLayout
 import android.widget.Toast
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -21,12 +22,14 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.BehindLiveWindowException
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.kybers.play.R
 import com.kybers.play.adapter.CategoryWithChannels
@@ -40,13 +43,14 @@ import com.kybers.play.manager.DataCacheManager
 import com.kybers.play.manager.LiveFavoritesManager
 import com.kybers.play.ui.search.SearchActivity
 import com.kybers.play.ui.settings.SettingsActivity
+import com.kybers.play.util.StickyHeaderDecoration
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.IOException
 
+@androidx.media3.common.util.UnstableApi
 class TvFragment : Fragment() {
 
     private var _binding: FragmentTvBinding? = null
@@ -103,10 +107,16 @@ class TvFragment : Fragment() {
     private fun setupRecyclerView() {
         tvCategoryAdapter = TvCategoryAdapter(
             onChannelClick = { channel -> playStream(channel) },
-            onFavoriteClick = { channel -> handleFavoriteClick(channel) }
+            onFavoriteClick = { channel -> handleFavoriteClick(channel) },
+            onCategoryToggled = { position ->
+                binding.appBarLayout.setExpanded(true, true)
+                (binding.recyclerViewTv.layoutManager as LinearLayoutManager)
+                    .scrollToPositionWithOffset(position, 0)
+            }
         )
         binding.recyclerViewTv.layoutManager = LinearLayoutManager(context)
         binding.recyclerViewTv.adapter = tvCategoryAdapter
+        binding.recyclerViewTv.addItemDecoration(StickyHeaderDecoration(tvCategoryAdapter))
     }
 
     private fun handleFavoriteClick(channel: LiveStream) {
@@ -124,38 +134,24 @@ class TvFragment : Fragment() {
 
     private fun initializePlayer() {
         if (player == null) {
-            // 1. Aumentamos el buffer para tener un "colchón" de 30-60 segundos
-            val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    30_000, // minBufferMs: Mínimo 30 segundos de video en caché
-                    60_000, // maxBufferMs: Máximo 60 segundos de video en caché
-                    2_500,  // bufferForPlaybackMs: Empezar a reproducir tras 2.5s de carga
-                    5_000   // bufferForPlaybackAfterRebufferMs: Reanudar tras 5s de carga
-                ).build()
+            val renderersFactory = DefaultRenderersFactory(requireContext())
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
 
-            // 2. Política de reintentos personalizada y MUY persistente
+            val loadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(30_000, 60_000, 2_500, 5_000).build()
+
             val loadErrorHandlingPolicy = object : DefaultLoadErrorHandlingPolicy() {
                 override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                    // Si el error es por quedarse atrás en el directo, reintenta muy rápido.
-                    if (loadErrorInfo.exception is BehindLiveWindowException) {
-                        Log.w("TvFragment", "BehindLiveWindowException detectado, reintentando en 500ms...")
-                        return 500
-                    }
-                    // Para otros errores de red, usa la estrategia por defecto (espera incremental).
+                    if (loadErrorInfo.exception is BehindLiveWindowException) return 500
                     return C.TIME_UNSET
                 }
-
-                override fun getMinimumLoadableRetryCount(dataType: Int): Int {
-                    // Reintentar "infinitamente" para que la conexión se recupere sola.
-                    return Int.MAX_VALUE
-                }
+                override fun getMinimumLoadableRetryCount(dataType: Int): Int = Int.MAX_VALUE
             }
 
             val mediaSourceFactory = DefaultMediaSourceFactory(requireContext())
                 .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
 
-            // 3. Construimos el reproductor con ambas mejoras
-            player = ExoPlayer.Builder(requireContext())
+            player = ExoPlayer.Builder(requireContext(), renderersFactory)
                 .setMediaSourceFactory(mediaSourceFactory)
                 .setLoadControl(loadControl)
                 .build().also { exoPlayer ->
@@ -164,15 +160,17 @@ class TvFragment : Fragment() {
 
                     exoPlayer.addListener(object : Player.Listener {
                         override fun onPlayerError(error: PlaybackException) {
-                            // La política de reintentos ya maneja la mayoría de los errores.
-                            // Este listener es un último recurso.
                             if (error.cause is BehindLiveWindowException) {
                                 Log.w("TvFragment", "Atrás de la ventana en vivo. Saltando al directo.")
                                 exoPlayer.seekToDefaultPosition()
                                 exoPlayer.prepare()
                             } else {
-                                Toast.makeText(context, "Error de reproducción: ${error.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Error de reproducción", Toast.LENGTH_SHORT).show()
                             }
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            binding.playerBuffering.visibility = if (playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
                         }
                     })
                 }
@@ -201,6 +199,8 @@ class TvFragment : Fragment() {
     }
 
     private fun loadInitialData() {
+        if (_binding == null) return
+
         DataCacheManager.tvCategories?.let {
             tvCategoryAdapter.submitList(it)
             binding.emptyStateLayout.visibility = View.GONE
@@ -211,6 +211,8 @@ class TvFragment : Fragment() {
     }
 
     private fun loadDataFromServer(isSilent: Boolean) {
+        if (_binding == null) return
+
         if (!isSilent) {
             binding.emptyStateLayout.visibility = View.GONE
             binding.progressBarTv.visibility = View.VISIBLE
@@ -247,8 +249,10 @@ class TvFragment : Fragment() {
 
                         finalCategoriesList.addAll(apiCategoriesWithChannels)
 
-                        DataCacheManager.tvCategories = finalCategoriesList
-                        tvCategoryAdapter.submitList(finalCategoriesList)
+                        if (isActive) {
+                            DataCacheManager.tvCategories = finalCategoriesList
+                            tvCategoryAdapter.submitList(finalCategoriesList)
+                        }
 
                         success = true
                         break
@@ -268,7 +272,7 @@ class TvFragment : Fragment() {
                 }
             }
 
-            if (viewLifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+            if (isActive) {
                 if (!isSilent) {
                     binding.progressBarTv.visibility = View.GONE
                     if (!success) {
@@ -293,32 +297,18 @@ class TvFragment : Fragment() {
         activity?.findViewById<BottomNavigationView>(R.id.bottom_navigation)?.visibility = if (isLandscape) View.GONE else View.VISIBLE
         binding.appBarLayout.visibility = if (isLandscape) View.GONE else View.VISIBLE
         binding.recyclerViewTv.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        binding.tvNowPlayingChannel.visibility = if (isLandscape || player?.isPlaying != true) View.GONE else View.VISIBLE
 
         val playerContainer = binding.playerContainer
-        val playerView = binding.playerViewTv
-
+        // CORREGIDO: El ClassCastException se soluciona usando los LayoutParams correctos
+        val params = playerContainer.layoutParams as AppBarLayout.LayoutParams
         if (isLandscape) {
-            val containerParams = playerContainer.layoutParams as RelativeLayout.LayoutParams
-            containerParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-            playerContainer.layoutParams = containerParams
-
-            val playerParams = playerView.layoutParams
-            playerParams.height = ViewGroup.LayoutParams.MATCH_PARENT
-            playerView.layoutParams = playerParams
-
+            params.height = ViewGroup.LayoutParams.MATCH_PARENT
             hideSystemUi()
         } else {
-            val containerParams = playerContainer.layoutParams as RelativeLayout.LayoutParams
-            containerParams.height = ViewGroup.LayoutParams.WRAP_CONTENT
-            playerContainer.layoutParams = containerParams
-
-            val playerParams = playerView.layoutParams
-            playerParams.height = resources.getDimensionPixelSize(R.dimen.player_height_portrait)
-            playerView.layoutParams = playerParams
-
+            params.height = ViewGroup.LayoutParams.WRAP_CONTENT
             showSystemUi()
         }
+        playerContainer.layoutParams = params
     }
 
     private fun hideSystemUi() {
@@ -353,15 +343,16 @@ class TvFragment : Fragment() {
     override fun onPause() {
         super.onPause()
         activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        player?.pause()
+        releasePlayer()
     }
 
     override fun onStop() {
         super.onStop()
-        releasePlayer()
+        // La liberación del reproductor ya se hace en onPause
     }
 
     private fun releasePlayer() {
+        binding.playerViewTv.player = null
         player?.release()
         player = null
     }
