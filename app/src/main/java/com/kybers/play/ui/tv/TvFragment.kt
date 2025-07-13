@@ -1,5 +1,6 @@
 package com.kybers.play.ui.tv
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -21,17 +22,14 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.BehindLiveWindowException
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
-import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.kybers.play.PlayerActivity
 import com.kybers.play.R
 import com.kybers.play.adapter.CategoryWithChannels
 import com.kybers.play.adapter.TvCategoryAdapter
@@ -42,7 +40,6 @@ import com.kybers.play.api.XtreamApiService
 import com.kybers.play.databinding.FragmentTvBinding
 import com.kybers.play.manager.DataCacheManager
 import com.kybers.play.manager.LiveFavoritesManager
-import com.kybers.play.ui.search.SearchActivity
 import com.kybers.play.ui.settings.SettingsActivity
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,6 +47,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+@SuppressLint("ClickableViewAccessibility")
 @androidx.media3.common.util.UnstableApi
 class TvFragment : Fragment() {
 
@@ -93,7 +91,7 @@ class TvFragment : Fragment() {
 
         setupToolbar()
         setupRecyclerView()
-        setupSearch() // AÑADIDO
+        setupSearch()
         binding.btnRetry.setOnClickListener {
             loadInitialData()
         }
@@ -123,13 +121,9 @@ class TvFragment : Fragment() {
         setupStickyHeader()
     }
 
-    // AÑADIDO: Nueva función para configurar la búsqueda.
     private fun setupSearch() {
         binding.searchViewTv.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
-                return false
-            }
-
+            override fun onQueryTextSubmit(query: String?): Boolean = false
             override fun onQueryTextChange(newText: String?): Boolean {
                 tvCategoryAdapter.filter(newText)
                 return true
@@ -175,6 +169,7 @@ class TvFragment : Fragment() {
         binding.stickyHeaderView.root.setOnClickListener {
             if (currentStickyHeaderPosition != RecyclerView.NO_POSITION) {
                 tvCategoryAdapter.handleCategoryClick(currentStickyHeaderPosition)
+                tvCategoryAdapter.bindHeaderData(binding.stickyHeaderView.root, currentStickyHeaderPosition)
             }
         }
     }
@@ -192,78 +187,77 @@ class TvFragment : Fragment() {
 
     private fun initializePlayer() {
         if (player == null && context != null) {
-            val renderersFactory = DefaultRenderersFactory(requireContext())
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-
-            val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(30_000, 60_000, 2_500, 5_000).build()
-
-            val loadErrorHandlingPolicy = object : DefaultLoadErrorHandlingPolicy() {
-                override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                    if (loadErrorInfo.exception is BehindLiveWindowException) return 500
-                    return C.TIME_UNSET
+            player = ExoPlayer.Builder(requireContext()).build().also { exoPlayer ->
+                binding.playerViewTv.player = exoPlayer
+                exoPlayer.playWhenReady = true
+                exoPlayer.addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        if (error.cause is BehindLiveWindowException) {
+                            exoPlayer.seekToDefaultPosition()
+                            exoPlayer.prepare()
+                        } else {
+                            Toast.makeText(context, "Error de reproducción", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        binding.playerBuffering.visibility = if (playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+                    }
+                })
+                // CORREGIDO: Un solo toque en el contenedor abre la pantalla completa.
+                binding.playerContainer.setOnClickListener {
+                    openPlayerActivity()
                 }
-                override fun getMinimumLoadableRetryCount(dataType: Int): Int = Int.MAX_VALUE
             }
+        }
+    }
 
-            val mediaSourceFactory = DefaultMediaSourceFactory(requireContext())
-                .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
-
-            player = ExoPlayer.Builder(requireContext(), renderersFactory)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .setLoadControl(loadControl)
-                .build().also { exoPlayer ->
-                    binding.playerViewTv.player = exoPlayer
-                    exoPlayer.playWhenReady = true
-                    exoPlayer.addListener(object : Player.Listener {
-                        override fun onPlayerError(error: PlaybackException) {
-                            if (error.cause is BehindLiveWindowException) {
-                                Log.w("TvFragment", "Atrás de la ventana en vivo. Saltando al directo.")
-                                exoPlayer.seekToDefaultPosition()
-                                exoPlayer.prepare()
-                            } else {
-                                Toast.makeText(context, "Error de reproducción", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                        override fun onPlaybackStateChanged(playbackState: Int) {
-                            binding.playerBuffering.visibility = if (playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
-                        }
-                    })
-                }
+    private fun openPlayerActivity() {
+        currentPlayingStream?.let { stream ->
+            val intent = Intent(activity, PlayerActivity::class.java).apply {
+                putExtra(PlayerActivity.EXTRA_ITEM_JSON, com.google.gson.Gson().toJson(stream))
+                putExtra(PlayerActivity.EXTRA_ITEM_TYPE, "live")
+                putExtra(PlayerActivity.EXTRA_START_POSITION, player?.currentPosition ?: 0)
+            }
+            startActivity(intent)
         }
     }
 
     private fun playStream(stream: LiveStream) {
         currentPlayingStream = stream
-        // CORREGIDO: Pasa también el categoryId al adaptador.
         tvCategoryAdapter.setNowPlaying(stream.streamId, stream.categoryId)
 
         val streamUrl = "$serverUrl/live/$username/$password/${stream.streamId}.m3u8"
-        val mediaItem = MediaItem.Builder()
-            .setUri(streamUrl)
-            .setLiveConfiguration(
-                MediaItem.LiveConfiguration.Builder()
-                    .setTargetOffsetMs(30000)
-                    .setMinOffsetMs(20000)
-                    .setMaxOffsetMs(50000)
-                    .build()
-            ).build()
+        val mediaItem = MediaItem.fromUri(streamUrl)
 
-        player?.setMediaItem(mediaItem, true)
+        player?.setMediaItem(mediaItem)
         player?.prepare()
 
-        // CORREGIDO: Actualiza el título de la Toolbar.
         binding.toolbarTv.title = "TV: ${stream.name}"
     }
 
     private fun loadInitialData() {
         if (_binding == null) return
-        DataCacheManager.tvCategories?.let {
-            tvCategoryAdapter.submitList(it)
-            binding.emptyStateLayout.visibility = View.GONE
-            binding.progressBarTv.visibility = View.GONE
+        if (DataCacheManager.tvCategories.isNullOrEmpty()) {
+            DataCacheManager.tvCategories = DataCacheManager.loadTvCacheFromFile(requireContext())
         }
-        loadDataFromServer(isSilent = DataCacheManager.tvCategories != null)
+        val baseCategories = DataCacheManager.tvCategories ?: emptyList()
+        prepareAndSubmitList(baseCategories)
+        val isCacheEmpty = baseCategories.isEmpty()
+        if (isCacheEmpty || DataCacheManager.isTvCacheStale(requireContext())) {
+            loadDataFromServer(isSilent = !isCacheEmpty)
+        }
+    }
+
+    private fun prepareAndSubmitList(baseList: List<CategoryWithChannels>) {
+        if (context == null) return
+        val finalList = mutableListOf<CategoryWithChannels>()
+        val favoriteChannels = LiveFavoritesManager.getFavorites(requireContext())
+        val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
+        finalList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
+        finalList.addAll(baseList.filter { it.category.categoryId != "favorites" })
+        tvCategoryAdapter.submitList(finalList)
+        binding.emptyStateLayout.visibility = if (finalList.size <= 1 && finalList.first().channels.isEmpty()) View.VISIBLE else View.GONE
+        binding.progressBarTv.visibility = View.GONE
     }
 
     private fun loadDataFromServer(isSilent: Boolean) {
@@ -276,14 +270,6 @@ class TvFragment : Fragment() {
             var success = false
             for (attempt in 1..MAX_RETRIES) {
                 try {
-                    val finalCategoriesList = mutableListOf<CategoryWithChannels>()
-                    context?.let {
-                        val favoriteChannels = LiveFavoritesManager.getFavorites(it)
-                        if (favoriteChannels.isNotEmpty()) {
-                            val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
-                            finalCategoriesList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
-                        }
-                    }
                     val categoriesResponse = apiService.getLiveCategories(username, password)
                     if (categoriesResponse.isSuccessful) {
                         val apiCategories = categoriesResponse.body() ?: emptyList()
@@ -295,10 +281,11 @@ class TvFragment : Fragment() {
                                 } else { null }
                             }
                         }.awaitAll().filterNotNull()
-                        finalCategoriesList.addAll(apiCategoriesWithChannels)
                         if (isActive) {
-                            DataCacheManager.tvCategories = finalCategoriesList
-                            tvCategoryAdapter.submitList(finalCategoriesList)
+                            DataCacheManager.tvCategories = apiCategoriesWithChannels
+                            DataCacheManager.saveTvCacheToFile(requireContext(), apiCategoriesWithChannels)
+                            DataCacheManager.updateTvSyncTimestamp(requireContext())
+                            prepareAndSubmitList(apiCategoriesWithChannels)
                         }
                         success = true
                         break
@@ -337,18 +324,14 @@ class TvFragment : Fragment() {
 
     private fun handleScreenOrientation(isLandscape: Boolean) {
         if (_binding == null) return
-
         activity?.findViewById<BottomNavigationView>(R.id.bottom_navigation)?.visibility = if (isLandscape) View.GONE else View.VISIBLE
         binding.appBarLayout.visibility = if (isLandscape) View.GONE else View.VISIBLE
         binding.listContainer.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        binding.searchViewTv.visibility = if (isLandscape) View.GONE else View.VISIBLE // Ocultar búsqueda en horizontal
-
+        binding.searchViewTv.visibility = if (isLandscape) View.GONE else View.VISIBLE
         val playerContainer = binding.playerContainer
         val params = playerContainer.layoutParams as ViewGroup.MarginLayoutParams
-
         val contentParent = binding.listContainer.parent as View
         val contentParams = contentParent.layoutParams as CoordinatorLayout.LayoutParams
-
         if (isLandscape) {
             params.height = ViewGroup.LayoutParams.MATCH_PARENT
             contentParams.behavior = null
@@ -410,9 +393,9 @@ class TvFragment : Fragment() {
             binding.playerViewTv.player = null
             player?.release()
             player = null
-            tvCategoryAdapter.setNowPlaying(null, null) // Limpiar resaltado
+            tvCategoryAdapter.setNowPlaying(null, null)
             currentPlayingStream = null
-            binding.toolbarTv.title = "TV en Vivo" // Restaurar título
+            binding.toolbarTv.title = "TV en Vivo"
         }
     }
 

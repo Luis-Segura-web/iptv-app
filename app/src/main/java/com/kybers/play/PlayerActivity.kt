@@ -9,7 +9,6 @@ import android.graphics.Rect
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
-import android.os.CountDownTimer
 import android.provider.Settings
 import android.util.Rational
 import android.view.View
@@ -24,7 +23,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -69,11 +67,11 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     private var currentContent: PlayableContent? = null
 
-    private var countdownTimer: CountDownTimer? = null
     private lateinit var audioManager: AudioManager
     private var maxVolume: Int = 0
     private var currentVolume: Int = 0
     private var currentBrightness: Float = 0.5f
+    private var lastVolumeBeforeMute: Float = 1f
 
     companion object {
         const val EXTRA_ITEM_JSON = "extra_item_json"
@@ -91,7 +89,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         itemType = intent.getStringExtra(EXTRA_ITEM_TYPE)
-
         val playlistJson = intent.getStringExtra(EXTRA_PLAYLIST_JSON)
         currentIndex = intent.getIntExtra(EXTRA_CURRENT_INDEX, -1)
         seriesTitle = intent.getStringExtra(EXTRA_SERIES_TITLE)
@@ -99,6 +96,8 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
         setupGestureControls()
         initVolumeAndBrightness()
+
+        handleConfigurationChange(resources.configuration)
 
         if (playlistJson != null && currentIndex != -1) {
             val gson = Gson()
@@ -170,7 +169,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         if (seriesPlaylist.isEmpty() || index < 0 || index >= seriesPlaylist.size) return
         currentIndex = index
         val item = seriesPlaylist[currentIndex]
-        // currentContent no se puede asignar directamente desde Episode. Se necesita una refactorización.
 
         val sharedPrefs = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
         val serverUrl = sharedPrefs.getString("SERVER_URL", "")!!
@@ -200,19 +198,12 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
             .build()
             .also { exoPlayer ->
                 binding.playerView.player = exoPlayer
-
-                // CORREGIDO: Se elimina la referencia a setControllerOnSingleTapConfirmed que no existe.
-                // El comportamiento de tap para mostrar/ocultar es el predeterminado.
-
                 val mediaItem = MediaItem.fromUri(url)
                 exoPlayer.setMediaItem(mediaItem)
                 exoPlayer.seekTo(startPosition)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
                 exoPlayer.addListener(object : Player.Listener {
-                    // CORREGIDO: onIsPlayingChanged se elimina porque el PlayerView ya maneja
-                    // la visibilidad de los botones exo_play y exo_pause automáticamente.
-
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_ENDED) handlePlaybackEnd()
                     }
@@ -243,7 +234,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val options = arrayOf("Relación de Aspecto", "Audio y Subtítulos", "Picture-in-Picture")
         val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, options)
 
-        // CORREGIDO: Se elimina el estilo que causaba el error y se usa el tema por defecto del contexto.
         AlertDialog.Builder(this)
             .setTitle("Opciones")
             .setAdapter(adapter) { dialog, which ->
@@ -261,11 +251,17 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private fun showTrackSelectionDialog() {
         val player = this.player ?: return
         val trackGroups = player.currentTracks.groups
+        if (trackGroups.isEmpty()) {
+            Toast.makeText(this, "No hay pistas de audio o subtítulos disponibles.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         val dialogView = layoutInflater.inflate(R.layout.dialog_track_selection, null)
         val audioGroup = dialogView.findViewById<RadioGroup>(R.id.audio_track_group)
         val subtitleGroup = dialogView.findViewById<RadioGroup>(R.id.subtitle_track_group)
         var audioGroupIndex = -1
         var subtitleGroupIndex = -1
+
         for ((groupIndex, trackGroup) in trackGroups.withIndex()) {
             if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
                 audioGroupIndex = groupIndex
@@ -289,15 +285,17 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                 }
             }
         }
+
         val noSubsButton = RadioButton(this).apply { text = getString(R.string.disabled); id = -1 }
-        if (subtitleGroup.checkedRadioButtonId == -1) noSubsButton.isChecked = true
+        if (subtitleGroup.childCount == 0 || subtitleGroup.checkedRadioButtonId == -1) noSubsButton.isChecked = true
         subtitleGroup.addView(noSubsButton, 0)
+
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.audio_and_subtitles))
             .setView(dialogView)
             .setPositiveButton(getString(android.R.string.ok)) { dialog, _ ->
                 val newParams = player.trackSelectionParameters.buildUpon()
-                if (audioGroupIndex != -1) {
+                if (audioGroupIndex != -1 && audioGroup.checkedRadioButtonId != -1) {
                     newParams.setOverrideForType(
                         TrackSelectionOverride(trackGroups[audioGroupIndex].mediaTrackGroup, audioGroup.checkedRadioButtonId)
                     )
@@ -340,21 +338,23 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     @SuppressLint("SourceLockedOrientationActivity")
     private fun exitFullscreen() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        val btnFullscreen = binding.playerView.findViewById<ImageButton>(R.id.btn_fullscreen)
-        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+        handleConfigurationChange(newConfig)
+    }
+
+    private fun handleConfigurationChange(config: Configuration) {
+        if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             hideSystemUi()
-            btnFullscreen.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.ic_fullscreen_exit))
             isFullscreen = true
-        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
+        } else {
             showSystemUi()
-            btnFullscreen.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.ic_fullscreen))
             isFullscreen = false
         }
+        binding.playerView.post { setupCustomControls() }
     }
 
     private fun hideSystemUi() {
@@ -371,7 +371,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     }
 
     private fun releasePlayer() {
-        countdownTimer?.cancel()
         saveHistory()
         player?.release()
         player = null
@@ -421,6 +420,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     }
 
     override fun onSingleTap() {
+        // CORREGIDO: Se usa la propiedad correcta de Media3.
         if (binding.playerView.isControllerFullyVisible) {
             binding.playerView.hideController()
         } else {

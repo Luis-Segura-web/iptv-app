@@ -22,7 +22,6 @@
             app:title="TV en Vivo"
             app:titleTextColor="@color/light_text">
 
-            <!-- CORREGIDO: Se elimina el botón de búsqueda y se deja solo el de ajustes -->
             <ImageButton
                 android:id="@+id/btn_settings_tv"
                 android:layout_width="48dp"
@@ -49,6 +48,7 @@
             android:layout_height="@dimen/player_height_portrait"
             android:background="@color/black">
 
+            <!-- CORREGIDO: Se apunta al layout de controles para el modo vertical -->
             <androidx.media3.ui.PlayerView
                 android:id="@+id/player_view_tv"
                 android:layout_width="match_parent"
@@ -67,7 +67,6 @@
 
         </FrameLayout>
 
-        <!-- AÑADIDO: Barra de búsqueda integrada -->
         <androidx.appcompat.widget.SearchView
             android:id="@+id/search_view_tv"
             android:layout_width="match_parent"
@@ -77,8 +76,6 @@
             app:queryHint="Buscar canales o categorías..."
             app:iconifiedByDefault="false"
             android:theme="@style/ThemeOverlay.AppCompat.Dark" />
-
-        <!-- ELIMINADO: El TextView "tv_now_playing_channel" se ha quitado -->
 
         <FrameLayout
             android:id="@+id/list_container"
