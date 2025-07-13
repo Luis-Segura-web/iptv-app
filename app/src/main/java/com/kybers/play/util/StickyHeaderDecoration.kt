@@ -9,53 +9,63 @@ import com.kybers.play.adapter.StickyHeaderInterface
 
 class StickyHeaderDecoration(private val listener: StickyHeaderInterface) : RecyclerView.ItemDecoration() {
 
-    private var currentHeader: View? = null
-    private var currentHeaderPosition: Int = -1
+    private var stickyHeaderHeight: Int = 0
 
     override fun onDrawOver(c: Canvas, parent: RecyclerView, state: RecyclerView.State) {
         super.onDrawOver(c, parent, state)
 
+        // Obtenemos la primera vista visible en el RecyclerView.
         val topChild = parent.getChildAt(0) ?: return
         val topChildPosition = parent.getChildAdapterPosition(topChild)
         if (topChildPosition == RecyclerView.NO_POSITION) {
             return
         }
 
+        // Obtenemos la posición del encabezado que corresponde al item superior.
         val headerPosition = listener.getHeaderPositionForItem(topChildPosition)
-        if (headerPosition != currentHeaderPosition) {
-            currentHeaderPosition = headerPosition
-            val headerLayout = listener.getHeaderLayout(headerPosition)
-            currentHeader = LayoutInflater.from(parent.context).inflate(headerLayout, parent, false)
-            listener.bindHeaderData(currentHeader!!, headerPosition)
-        }
+        if (headerPosition == RecyclerView.NO_POSITION) return
 
-        val header = currentHeader ?: return
+        // Obtenemos la vista del encabezado actual y la dibujamos.
+        val currentHeader = getHeaderViewForItem(headerPosition, parent)
+        fixLayoutSize(parent, currentHeader)
 
-        var contactPoint = header.bottom
+        // Verificamos si el siguiente encabezado está a punto de empujar al actual.
+        val contactPoint = currentHeader.bottom
         val childInContact = getChildInContact(parent, contactPoint)
 
+        // Si el siguiente item es un encabezado, calculamos el desplazamiento.
         if (childInContact != null && listener.isHeader(parent.getChildAdapterPosition(childInContact))) {
-            moveHeader(c, header, childInContact)
+            moveHeader(c, currentHeader, childInContact)
             return
         }
 
-        drawHeader(c, header)
+        // Si no, simplemente dibujamos el encabezado en la parte superior.
+        drawHeader(c, currentHeader)
     }
 
-    private fun getChildInContact(parent: RecyclerView, contactPoint: Int): View? {
-        var childInContact: View? = null
-        for (i in 0 until parent.childCount) {
-            val child = parent.getChildAt(i)
-            if (child.bottom > contactPoint) {
-                if (child.top <= contactPoint) {
-                    childInContact = child
-                    break
-                }
-            }
-        }
-        return childInContact
+    /**
+     * Infla y bindea la vista del encabezado para una posición dada.
+     */
+    private fun getHeaderViewForItem(headerPosition: Int, parent: RecyclerView): View {
+        val layoutResId = listener.getHeaderLayout(headerPosition)
+        val header = LayoutInflater.from(parent.context).inflate(layoutResId, parent, false)
+        listener.bindHeaderData(header, headerPosition)
+        return header
     }
 
+    /**
+     * Dibuja el encabezado en la parte superior de la vista.
+     */
+    private fun drawHeader(c: Canvas, header: View) {
+        c.save()
+        c.translate(0f, 0f)
+        header.draw(c)
+        c.restore()
+    }
+
+    /**
+     * Dibuja el encabezado con un desplazamiento vertical para dar el efecto de "empuje".
+     */
     private fun moveHeader(c: Canvas, currentHeader: View, nextHeader: View) {
         c.save()
         c.translate(0f, (nextHeader.top - currentHeader.height).toFloat())
@@ -63,10 +73,32 @@ class StickyHeaderDecoration(private val listener: StickyHeaderInterface) : Recy
         c.restore()
     }
 
-    private fun drawHeader(c: Canvas, header: View) {
-        c.save()
-        c.translate(0f, 0f)
-        header.draw(c)
-        c.restore()
+    /**
+     * Busca la vista que está en contacto con el borde inferior del encabezado pegajoso.
+     */
+    private fun getChildInContact(parent: RecyclerView, contactPoint: Int): View? {
+        var childInContact: View? = null
+        for (i in 0 until parent.childCount) {
+            val child = parent.getChildAt(i)
+            if (child.bottom > contactPoint && child.top <= contactPoint) {
+                childInContact = child
+                break
+            }
+        }
+        return childInContact
+    }
+
+    /**
+     * Mide y establece las dimensiones correctas para la vista del encabezado.
+     * Esto es CRUCIAL para que se dibuje correctamente.
+     */
+    private fun fixLayoutSize(parent: ViewGroup, view: View) {
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(parent.width, View.MeasureSpec.EXACTLY)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(parent.height, View.MeasureSpec.UNSPECIFIED)
+
+        view.measure(widthSpec, heightSpec)
+
+        stickyHeaderHeight = view.measuredHeight
+        view.layout(0, 0, view.measuredWidth, stickyHeaderHeight)
     }
 }

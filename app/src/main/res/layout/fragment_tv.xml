@@ -22,42 +22,37 @@
             app:title="TV en Vivo"
             app:titleTextColor="@color/light_text">
 
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+            <!-- CORREGIDO: Se elimina el botón de búsqueda y se deja solo el de ajustes -->
+            <ImageButton
+                android:id="@+id/btn_settings_tv"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:layout_gravity="end"
-                android:orientation="horizontal">
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Ajustes"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/light_text" />
 
-                <ImageButton
-                    android:id="@+id/btn_search_tv"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Buscar"
-                    android:src="@drawable/ic_search"
-                    app:tint="@color/light_text" />
-
-                <ImageButton
-                    android:id="@+id/btn_settings_tv"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Ajustes"
-                    android:src="@drawable/ic_settings"
-                    app:tint="@color/light_text" />
-            </LinearLayout>
         </androidx.appcompat.widget.Toolbar>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <FrameLayout
             android:id="@+id/player_container"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_height="@dimen/player_height_portrait"
             android:background="@color/black">
 
             <androidx.media3.ui.PlayerView
                 android:id="@+id/player_view_tv"
                 android:layout_width="match_parent"
-                android:layout_height="220dp"
+                android:layout_height="match_parent"
                 app:controller_layout_id="@layout/custom_player_controls"
                 app:resize_mode="fit"
                 app:use_controller="true" />
@@ -69,76 +64,83 @@
                 android:layout_gravity="center"
                 android:visibility="gone"
                 tools:visibility="visible" />
+
         </FrameLayout>
 
-        <TextView
-            android:id="@+id/tv_now_playing_channel"
+        <!-- AÑADIDO: Barra de búsqueda integrada -->
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/search_view_tv"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/dark_surface"
-            android:padding="12dp"
-            android:textColor="@color/light_text"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:visibility="gone"
-            tools:text="Reproduciendo: Nombre del Canal"
-            tools:visibility="visible" />
+            android:layout_margin="8dp"
+            android:background="@drawable/search_view_bg"
+            app:queryHint="Buscar canales o categorías..."
+            app:iconifiedByDefault="false"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark" />
 
-    </com.google.android.material.appbar.AppBarLayout>
+        <!-- ELIMINADO: El TextView "tv_now_playing_channel" se ha quitado -->
 
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler_view_tv"
+        <FrameLayout
+            android:id="@+id/list_container"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:padding="8dp"
-            tools:listitem="@layout/item_tv_category" />
+            android:layout_height="match_parent">
 
-        <LinearLayout
-            android:id="@+id/empty_state_layout"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:visibility="gone">
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_view_tv"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                tools:listitem="@layout/item_tv_category" />
 
-            <ImageView
-                android:id="@+id/iv_empty_icon"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
-                android:src="@drawable/ic_no_internet"
-                app:tint="@color/dark_text" />
+            <include
+                android:id="@+id/sticky_header_view"
+                layout="@layout/item_tv_category"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                tools:visibility="visible"/>
 
-            <TextView
-                android:id="@+id/tv_empty_message"
+            <LinearLayout
+                android:id="@+id/empty_state_layout"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/iv_empty_icon"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:src="@drawable/ic_no_internet"
+                    app:tint="@color/dark_text" />
+
+                <TextView
+                    android:id="@+id/tv_empty_message"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Error al cargar el contenido."
+                    android:textColor="@color/dark_text"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/btn_retry"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Reintentar"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/progress_bar_tv"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="Error al cargar el contenido."
-                android:textColor="@color/dark_text"
-                android:textSize="16sp" />
-
-            <Button
-                android:id="@+id/btn_retry"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="Reintentar"
+                android:layout_gravity="center"
                 android:visibility="gone" />
-        </LinearLayout>
 
-        <ProgressBar
-            android:id="@+id/progress_bar_tv"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone" />
-
-    </FrameLayout>
+        </FrameLayout>
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

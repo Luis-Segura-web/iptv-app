@@ -16,6 +16,7 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
+import android.widget.ArrayAdapter
 import android.widget.ImageButton
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -142,7 +143,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
             HistoryManager.addItemToHistory(this, historyItem)
         }
 
-        binding.tvContentTitle.text = title
+        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = title
         initializePlayer(playbackUrl)
     }
 
@@ -158,7 +159,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val password = sharedPrefs.getString("PASSWORD", "")!!
 
         val playbackUrl = "$serverUrl/live/$username/$password/${item.streamId}.m3u8"
-        binding.tvContentTitle.text = item.name
+        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = item.name
 
         val historyItem = HistoryItem(item, 0, 0)
         HistoryManager.addItemToHistory(this, historyItem)
@@ -169,7 +170,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         if (seriesPlaylist.isEmpty() || index < 0 || index >= seriesPlaylist.size) return
         currentIndex = index
         val item = seriesPlaylist[currentIndex]
-        // currentContent = item // No se puede asignar directamente
+        // currentContent no se puede asignar directamente desde Episode. Se necesita una refactorización.
 
         val sharedPrefs = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
         val serverUrl = sharedPrefs.getString("SERVER_URL", "")!!
@@ -178,7 +179,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
         val playbackUrl = "$serverUrl/series/$username/$password/${item.id}.${item.containerExtension}"
         val titleText = "$seriesTitle: T${item.episodeNum} E${item.episodeNum} - ${item.title}"
-        binding.tvContentTitle.text = titleText
+        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = titleText
 
         initializePlayer(playbackUrl)
     }
@@ -199,20 +200,21 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
             .build()
             .also { exoPlayer ->
                 binding.playerView.player = exoPlayer
+
+                // CORREGIDO: Se elimina la referencia a setControllerOnSingleTapConfirmed que no existe.
+                // El comportamiento de tap para mostrar/ocultar es el predeterminado.
+
                 val mediaItem = MediaItem.fromUri(url)
                 exoPlayer.setMediaItem(mediaItem)
                 exoPlayer.seekTo(startPosition)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
                 exoPlayer.addListener(object : Player.Listener {
+                    // CORREGIDO: onIsPlayingChanged se elimina porque el PlayerView ya maneja
+                    // la visibilidad de los botones exo_play y exo_pause automáticamente.
+
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED) {
-                            handlePlaybackEnd()
-                        }
-                    }
-                    override fun onTracksChanged(tracks: Tracks) {
-                        super.onTracksChanged(tracks)
-                        updateTrackSelectionButton()
+                        if (playbackState == Player.STATE_ENDED) handlePlaybackEnd()
                     }
                 })
                 binding.playerView.post { setupCustomControls() }
@@ -221,147 +223,85 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     private fun handlePlaybackEnd() {
         if (itemType == "series" && SettingsManager.isAutoplayNextEpisodeEnabled(this)) {
-            showAutoplayCountdown()
+            playNextEpisode()
         }
-    }
-
-    private fun showAutoplayCountdown() {
-        val countdownText = binding.playerView.findViewById<TextView>(R.id.countdown_text)
-        countdownText?.visibility = View.VISIBLE
-
-        countdownTimer = object : CountDownTimer(6000, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                val remainingSeconds = millisUntilFinished / 1000
-                countdownText?.text = getString(R.string.next_episode_countdown, remainingSeconds)
-            }
-            override fun onFinish() {
-                countdownText?.visibility = View.GONE
-                playNextEpisode()
-            }
-        }.start()
     }
 
     private fun setupCustomControls() {
-        val btnFullscreen = binding.playerView.findViewById<ImageButton>(R.id.btn_fullscreen)
-        val btnClose = binding.playerView.findViewById<ImageButton>(R.id.btn_close)
-        val btnTracks = binding.playerView.findViewById<ImageButton>(R.id.btn_tracks)
-        val btnAspectRatio = binding.playerView.findViewById<ImageButton>(R.id.btn_aspect_ratio)
-        val btnPip = binding.playerView.findViewById<ImageButton>(R.id.btn_pip)
-        val btnNextLive = binding.playerView.findViewById<ImageButton>(R.id.btn_next)
-        val btnPrevLive = binding.playerView.findViewById<ImageButton>(R.id.btn_prev)
-        val btnFfwd = binding.playerView.findViewById<ImageButton>(androidx.media3.ui.R.id.exo_ffwd)
-        val btnRew = binding.playerView.findViewById<ImageButton>(androidx.media3.ui.R.id.exo_rew)
-        val btnNextEpisode = binding.playerView.findViewById<ImageButton>(R.id.btn_next_episode)
-
-        btnClose.setOnClickListener { onBackPressedDispatcher.onBackPressed() }
-        btnFullscreen.setOnClickListener { toggleFullscreen() }
-        btnTracks?.setOnClickListener { showTrackSelectionDialog() }
-        btnAspectRatio?.setOnClickListener { toggleAspectRatio() }
-        btnPip?.setOnClickListener { enterPiPMode() }
-
-        when (itemType) {
-            "live" -> {
-                btnNextLive.visibility = View.VISIBLE
-                btnPrevLive.visibility = View.VISIBLE
-                btnFfwd.visibility = View.GONE
-                btnRew.visibility = View.GONE
-                btnNextEpisode?.visibility = View.GONE
-                btnNextLive.setOnClickListener { playNext() }
-                btnPrevLive.setOnClickListener { playPrevious() }
-            }
-            "movie" -> {
-                btnNextLive.visibility = View.GONE
-                btnPrevLive.visibility = View.GONE
-                btnFfwd.visibility = View.VISIBLE
-                btnRew.visibility = View.VISIBLE
-                btnNextEpisode?.visibility = View.GONE
-            }
-            "series" -> {
-                btnNextLive.visibility = View.GONE
-                btnPrevLive.visibility = View.GONE
-                btnFfwd.visibility = View.VISIBLE
-                btnRew.visibility = View.VISIBLE
-                btnNextEpisode?.visibility = View.VISIBLE
-                btnNextEpisode.setOnClickListener {
-                    countdownTimer?.cancel()
-                    binding.playerView.findViewById<TextView>(R.id.countdown_text)?.visibility = View.GONE
-                    playNextEpisode()
-                }
-            }
+        binding.playerView.findViewById<ImageButton>(R.id.btn_back)?.setOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
+        }
+        binding.playerView.findViewById<ImageButton>(R.id.btn_fullscreen)?.setOnClickListener {
+            toggleFullscreen()
+        }
+        binding.playerView.findViewById<ImageButton>(R.id.btn_more_options)?.setOnClickListener {
+            showMoreOptionsDialog()
         }
     }
 
-    private fun updateTrackSelectionButton() {
-        val btnTracks = binding.playerView.findViewById<ImageButton>(R.id.btn_tracks) ?: return
-        val trackGroups = player?.currentTracks?.groups ?: return
+    private fun showMoreOptionsDialog() {
+        val options = arrayOf("Relación de Aspecto", "Audio y Subtítulos", "Picture-in-Picture")
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, options)
 
-        val hasAudioOptions = trackGroups.any { it.type == C.TRACK_TYPE_AUDIO && it.length > 1 }
-        val hasSubtitleOptions = trackGroups.any { it.type == C.TRACK_TYPE_TEXT }
-
-        btnTracks.visibility = if (hasAudioOptions || hasSubtitleOptions) View.VISIBLE else View.GONE
+        // CORREGIDO: Se elimina el estilo que causaba el error y se usa el tema por defecto del contexto.
+        AlertDialog.Builder(this)
+            .setTitle("Opciones")
+            .setAdapter(adapter) { dialog, which ->
+                when (which) {
+                    0 -> toggleAspectRatio()
+                    1 -> showTrackSelectionDialog()
+                    2 -> enterPiPMode()
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun showTrackSelectionDialog() {
         val player = this.player ?: return
         val trackGroups = player.currentTracks.groups
-
         val dialogView = layoutInflater.inflate(R.layout.dialog_track_selection, null)
         val audioGroup = dialogView.findViewById<RadioGroup>(R.id.audio_track_group)
         val subtitleGroup = dialogView.findViewById<RadioGroup>(R.id.subtitle_track_group)
-
         var audioGroupIndex = -1
         var subtitleGroupIndex = -1
-
         for ((groupIndex, trackGroup) in trackGroups.withIndex()) {
             if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
                 audioGroupIndex = groupIndex
                 for (i in 0 until trackGroup.length) {
-                    // CORREGIDO: Se usa getTrackFormat en lugar de getFormat
                     val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
-                    // CORREGIDO: Se usa 'it' correctamente dentro del bloque 'let'
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Audio #${i + 1}"
                     val radioButton = RadioButton(this).apply { text = label; id = i }
-                    if (trackGroup.isTrackSelected(i)) {
-                        radioButton.isChecked = true
-                    }
+                    if (trackGroup.isTrackSelected(i)) radioButton.isChecked = true
                     audioGroup.addView(radioButton)
                 }
             } else if (trackGroup.type == C.TRACK_TYPE_TEXT) {
                 subtitleGroupIndex = groupIndex
                 for (i in 0 until trackGroup.length) {
-                    // CORREGIDO: Se usa getTrackFormat en lugar de getFormat
                     val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
-                    // CORREGIDO: Se usa 'it' correctamente dentro del bloque 'let'
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Subtítulos #${i + 1}"
                     val radioButton = RadioButton(this).apply { text = label; id = i }
-                    if (trackGroup.isTrackSelected(i)) {
-                        radioButton.isChecked = true
-                    }
+                    if (trackGroup.isTrackSelected(i)) radioButton.isChecked = true
                     subtitleGroup.addView(radioButton)
                 }
             }
         }
-
         val noSubsButton = RadioButton(this).apply { text = getString(R.string.disabled); id = -1 }
-        if (subtitleGroup.checkedRadioButtonId == -1) {
-            noSubsButton.isChecked = true
-        }
+        if (subtitleGroup.checkedRadioButtonId == -1) noSubsButton.isChecked = true
         subtitleGroup.addView(noSubsButton, 0)
-
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.audio_and_subtitles))
             .setView(dialogView)
             .setPositiveButton(getString(android.R.string.ok)) { dialog, _ ->
                 val newParams = player.trackSelectionParameters.buildUpon()
-
                 if (audioGroupIndex != -1) {
                     newParams.setOverrideForType(
                         TrackSelectionOverride(trackGroups[audioGroupIndex].mediaTrackGroup, audioGroup.checkedRadioButtonId)
                     )
                 }
-
                 if (subtitleGroupIndex != -1) {
                     val selectedSubtitleTrackIndex = subtitleGroup.checkedRadioButtonId
                     if (selectedSubtitleTrackIndex == -1) {
@@ -373,20 +313,11 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                         )
                     }
                 }
-
                 player.trackSelectionParameters = newParams.build()
                 dialog.dismiss()
             }
             .setNegativeButton(getString(android.R.string.cancel), null)
             .show()
-    }
-
-    private fun playNext() {
-        if (currentIndex < livePlaylist.size - 1) playItemFromLivePlaylist(currentIndex + 1)
-    }
-
-    private fun playPrevious() {
-        if (currentIndex > 0) playItemFromLivePlaylist(currentIndex - 1)
     }
 
     private fun playNextEpisode() {
@@ -417,12 +348,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val btnFullscreen = binding.playerView.findViewById<ImageButton>(R.id.btn_fullscreen)
         if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
             hideSystemUi()
-            binding.infoContainer.visibility = View.GONE
             btnFullscreen.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.ic_fullscreen_exit))
             isFullscreen = true
         } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) {
             showSystemUi()
-            binding.infoContainer.visibility = View.VISIBLE
             btnFullscreen.setImageDrawable(ContextCompat.getDrawable(this, R.drawable.ic_fullscreen))
             isFullscreen = false
         }
@@ -451,10 +380,8 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private fun saveHistory() {
         val player = this.player ?: return
         val content = this.currentContent ?: return
-
         val lastPosition = player.currentPosition
         val duration = player.duration
-
         if (lastPosition > 1000 && duration > 0) {
             val historyItem = HistoryItem(content, lastPosition, duration)
             HistoryManager.addItemToHistory(this, historyItem)
@@ -486,7 +413,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-
         try {
             currentBrightness = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
         } catch (e: Settings.SettingNotFoundException) {
@@ -515,19 +441,16 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private fun showSeekAnimation(view: View) {
         val fadeIn = AnimationUtils.loadAnimation(this, R.anim.fade_in)
         val fadeOut = AnimationUtils.loadAnimation(this, R.anim.fade_out)
-
         fadeIn.setAnimationListener(object : Animation.AnimationListener {
             override fun onAnimationStart(animation: Animation?) {}
             override fun onAnimationEnd(animation: Animation?) { view.startAnimation(fadeOut) }
             override fun onAnimationRepeat(animation: Animation?) {}
         })
-
         fadeOut.setAnimationListener(object : Animation.AnimationListener {
             override fun onAnimationStart(animation: Animation?) {}
             override fun onAnimationEnd(animation: Animation?) { view.visibility = View.GONE }
             override fun onAnimationRepeat(animation: Animation?) {}
         })
-
         view.visibility = View.VISIBLE
         view.startAnimation(fadeIn)
     }
@@ -536,13 +459,12 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val sensitivity = 1.5f
         val screenHeight = binding.root.height
         if (screenHeight == 0) return
-
-        if (isLeft) { // Brillo
+        if (isLeft) {
             currentBrightness -= (distanceY / screenHeight) * sensitivity
             currentBrightness = currentBrightness.coerceIn(0.0f, 1.0f)
             setBrightness(currentBrightness)
             showIndicator(true, (currentBrightness * 100).toInt())
-        } else { // Volumen
+        } else {
             val delta = -(distanceY / screenHeight) * maxVolume * sensitivity
             currentVolume += delta.toInt()
             currentVolume = currentVolume.coerceIn(0, maxVolume)
@@ -562,10 +484,8 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val icon = indicatorLayout.indicatorIcon
         val progressBar = indicatorLayout.indicatorProgress
         val indicatorView = indicatorLayout.root
-
         icon.setImageResource(if (isBrightness) R.drawable.ic_brightness else R.drawable.ic_volume)
         progressBar.progress = progress
-
         indicatorView.visibility = View.VISIBLE
         indicatorView.postDelayed({ indicatorView.visibility = View.GONE }, 1500)
     }
