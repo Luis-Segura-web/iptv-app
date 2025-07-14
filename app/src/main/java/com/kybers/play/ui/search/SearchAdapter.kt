@@ -2,77 +2,87 @@ package com.kybers.play.ui.search
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.kybers.play.R
 import com.kybers.play.api.LiveStream
 import com.kybers.play.api.Movie
+import com.kybers.play.api.PlayableContent
 import com.kybers.play.api.Series
 import com.kybers.play.databinding.ItemContentBinding
-import com.kybers.play.databinding.ItemMovieBinding
 
+/**
+ * Adaptador para la lista de resultados de búsqueda.
+ * Es capaz de mostrar diferentes tipos de contenido (LiveStream, Movie, Series)
+ * en una única lista, usando el mismo layout de item.
+ */
 class SearchAdapter(
-    private var items: List<Any>,
-    private val onResultClick: (Any) -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private val onResultClick: (PlayableContent) -> Unit
+) : ListAdapter<PlayableContent, SearchAdapter.ViewHolder>(SearchDiffCallback()) {
 
-    private val TYPE_LIVE_STREAM = 0
-    private val TYPE_MOVIE = 1
-    private val TYPE_SERIES = 2
+    /**
+     * ViewHolder que contiene la vista de un solo resultado de búsqueda.
+     */
+    inner class ViewHolder(private val binding: ItemContentBinding) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(item: PlayableContent) {
+            binding.tvName.text = item.getTitle()
 
-    inner class LiveStreamViewHolder(val binding: ItemContentBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: LiveStream) {
-            binding.tvName.text = item.name
-            Glide.with(binding.ivIcon.context).load(item.streamIcon).placeholder(R.drawable.ic_tv).into(binding.ivIcon)
-            binding.root.setOnClickListener { onResultClick(item) }
-        }
-    }
-
-    inner class MediaViewHolder(val binding: ItemMovieBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: Any) {
+            // Determina el tipo de contenido para mostrarlo en el subtítulo
+            // y cargar la imagen y el placeholder correctos.
+            val placeholder: Int
             when (item) {
+                is LiveStream -> {
+                    binding.tvType.text = "Canal en Vivo"
+                    placeholder = R.drawable.ic_tv
+                }
                 is Movie -> {
-                    binding.tvMovieTitle.text = item.name
-                    Glide.with(binding.ivMoviePoster.context).load(item.streamIcon).placeholder(R.drawable.ic_movie).into(binding.ivMoviePoster)
+                    binding.tvType.text = "Película"
+                    placeholder = R.drawable.ic_movie
                 }
                 is Series -> {
-                    binding.tvMovieTitle.text = item.name
-                    Glide.with(binding.ivMoviePoster.context).load(item.cover).placeholder(R.drawable.ic_series).into(binding.ivMoviePoster)
+                    binding.tvType.text = "Serie"
+                    placeholder = R.drawable.ic_series
+                }
+                else -> {
+                    binding.tvType.text = ""
+                    placeholder = R.drawable.ic_logo_placeholder
                 }
             }
+
+            Glide.with(binding.ivIcon.context)
+                .load(item.getCoverUrl())
+                .placeholder(placeholder)
+                .error(placeholder) // Muestra el placeholder también si hay un error al cargar
+                .into(binding.ivIcon)
+
             binding.root.setOnClickListener { onResultClick(item) }
         }
     }
 
-    override fun getItemViewType(position: Int): Int {
-        return when (items[position]) {
-            is LiveStream -> TYPE_LIVE_STREAM
-            is Movie -> TYPE_MOVIE
-            is Series -> TYPE_SERIES
-            else -> throw IllegalArgumentException("Tipo de item desconocido")
-        }
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        val binding = ItemContentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return ViewHolder(binding)
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val inflater = LayoutInflater.from(parent.context)
-        return when (viewType) {
-            TYPE_LIVE_STREAM -> LiveStreamViewHolder(ItemContentBinding.inflate(inflater, parent, false))
-            TYPE_MOVIE, TYPE_SERIES -> MediaViewHolder(ItemMovieBinding.inflate(inflater, parent, false))
-            else -> throw IllegalArgumentException("Tipo de vista desconocido")
-        }
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        holder.bind(getItem(position))
+    }
+}
+
+/**
+ * Callback para que DiffUtil calcule las diferencias entre dos listas de resultados de búsqueda.
+ * Compara items usando la interfaz PlayableContent.
+ */
+class SearchDiffCallback : DiffUtil.ItemCallback<PlayableContent>() {
+    override fun areItemsTheSame(oldItem: PlayableContent, newItem: PlayableContent): Boolean {
+        // Los items son los mismos si su ID y tipo son iguales.
+        return oldItem.getContentId() == newItem.getContentId() && oldItem.getType() == newItem.getType()
     }
 
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (holder) {
-            is LiveStreamViewHolder -> holder.bind(items[position] as LiveStream)
-            is MediaViewHolder -> holder.bind(items[position])
-        }
-    }
-
-    override fun getItemCount() = items.size
-
-    fun updateItems(newItems: List<Any>) {
-        items = newItems
-        notifyDataSetChanged()
+    override fun areContentsTheSame(oldItem: PlayableContent, newItem: PlayableContent): Boolean {
+        // El contenido es el mismo si los objetos son idénticos.
+        return oldItem == newItem
     }
 }

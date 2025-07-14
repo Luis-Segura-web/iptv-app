@@ -1,17 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:padding="12dp"
     android:gravity="center_vertical"
-    android:background="?android:attr/selectableItemBackground">
+    android:background="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
 
     <TextView
         android:id="@+id/tv_episode_number"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="1."
+        tools:text="1."
         android:textColor="@color/light_text"
         android:textSize="16sp"
         android:textStyle="bold"/>
@@ -22,7 +25,7 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:layout_marginStart="16dp"
-        android:text="Título del Episodio"
+        tools:text="Título del Episodio"
         android:textColor="@color/light_text"
         android:textSize="16sp"/>
 

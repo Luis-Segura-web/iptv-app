@@ -9,19 +9,20 @@
 
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="200dp">
 
         <ImageView
             android:id="@+id/iv_poster"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
+            android:layout_height="match_parent"
             android:scaleType="centerCrop"
-            android:src="@drawable/ic_movie" />
+            android:src="@drawable/ic_movie"
+            android:contentDescription="Portada del contenido"/>
 
+        <!-- Un gradiente oscuro para que el botón de play resalte -->
         <View
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_alignBottom="@id/iv_poster"
             android:background="#60000000" />
 
         <ImageView
@@ -29,14 +30,16 @@
             android:layout_height="48dp"
             android:layout_centerInParent="true"
             android:src="@drawable/ic_play_circle"
-            app:tint="@color/white"/>
+            app:tint="@color/white"
+            android:contentDescription="Reproducir"/>
 
+        <!-- Barra de progreso para mostrar cuánto se ha visto -->
         <ProgressBar
             android:id="@+id/progress_bar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
             android:layout_height="4dp"
-            android:layout_alignBottom="@id/iv_poster"
+            android:layout_alignParentBottom="true"
             android:progressTint="@color/red_accent"
             android:progressBackgroundTint="@color/dark_text"/>
 

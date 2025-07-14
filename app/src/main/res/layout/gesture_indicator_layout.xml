@@ -1,20 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center"
     android:padding="16dp"
     android:background="@drawable/indicator_background"
-    android:visibility="gone">
+    android:visibility="gone"
+    tools:visibility="visible">
 
     <ImageView
         android:id="@+id/indicator_icon"
         android:layout_width="32dp"
         android:layout_height="32dp"
-        android:src="@drawable/ic_brightness"
         app:tint="@color/white"
+        tools:src="@drawable/ic_brightness"
         android:contentDescription="Indicador de gesto" />
 
     <ProgressBar

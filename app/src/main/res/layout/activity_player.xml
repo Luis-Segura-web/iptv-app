@@ -5,9 +5,11 @@
     android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@android:color/black"
     tools:context=".PlayerActivity">
 
+    <!-- El componente principal que reproduce el video.
+         Ocupa toda la pantalla. -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="0dp"
@@ -19,6 +21,7 @@
         app:controller_layout_id="@layout/custom_player_controls"
         app:use_controller="true" />
 
+    <!-- Nuestra vista personalizada para gestos, superpuesta al reproductor. -->
     <com.kybers.play.util.GestureControlView
         android:id="@+id/gesture_view"
         android:layout_width="0dp"
@@ -28,7 +31,7 @@
         app:layout_constraintStart_toStartOf="@id/playerView"
         app:layout_constraintEnd_toEndOf="@id/playerView"/>
 
-    <!-- Contenedor para la animación de retroceso -->
+    <!-- Contenedor para la animación de retroceso (doble toque izquierda) -->
     <LinearLayout
         android:id="@+id/replay_container"
         android:layout_width="wrap_content"
@@ -49,7 +52,7 @@
             android:contentDescription="@string/rewind_10_seconds" />
     </LinearLayout>
 
-    <!-- Contenedor para la animación de avance -->
+    <!-- Contenedor para la animación de avance (doble toque derecha) -->
     <LinearLayout
         android:id="@+id/forward_container"
         android:layout_width="wrap_content"
@@ -70,6 +73,7 @@
             android:contentDescription="@string/forward_10_seconds" />
     </LinearLayout>
 
+    <!-- Guía vertical para dividir la pantalla por la mitad -->
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline_center"
         android:layout_width="wrap_content"

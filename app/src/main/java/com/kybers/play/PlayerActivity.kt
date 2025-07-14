@@ -15,7 +15,6 @@ import android.view.View
 import android.view.WindowManager
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
-import android.widget.ArrayAdapter
 import android.widget.ImageButton
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -61,17 +60,14 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private var currentIndex: Int = -1
     private var itemType: String? = null
     private var seriesTitle: String? = null
+    private var startPosition: Long = 0L
+    private var currentContent: PlayableContent? = null
+
     private var isFullscreen = false
     private var currentResizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-    private var startPosition: Long = 0L
-
-    private var currentContent: PlayableContent? = null
 
     private lateinit var audioManager: AudioManager
     private var maxVolume: Int = 0
-    private var currentVolume: Int = 0
-    private var currentBrightness: Float = 0.5f
-    private var lastVolumeBeforeMute: Float = 1f
 
     companion object {
         const val EXTRA_ITEM_JSON = "extra_item_json"
@@ -88,16 +84,19 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         setContentView(binding.root)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
+        setupGestureControls()
+        initVolumeAndBrightness()
+        handleConfigurationChange(resources.configuration)
+
+        processIntent()
+    }
+
+    private fun processIntent() {
         itemType = intent.getStringExtra(EXTRA_ITEM_TYPE)
         val playlistJson = intent.getStringExtra(EXTRA_PLAYLIST_JSON)
         currentIndex = intent.getIntExtra(EXTRA_CURRENT_INDEX, -1)
         seriesTitle = intent.getStringExtra(EXTRA_SERIES_TITLE)
         startPosition = intent.getLongExtra(EXTRA_START_POSITION, 0L)
-
-        setupGestureControls()
-        initVolumeAndBrightness()
-
-        handleConfigurationChange(resources.configuration)
 
         if (playlistJson != null && currentIndex != -1) {
             val gson = Gson()
@@ -119,30 +118,22 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                 playSingleItem(itemJson, itemType!!)
             } else {
                 finish()
-                return
             }
         }
     }
 
-    private fun playSingleItem(itemJson: String, type: String) {
+    private fun playSingleItem(itemJson: String, @Suppress("UNUSED_PARAMETER") type: String) {
         val gson = Gson()
-        var playbackUrl: String? = null
-        var title: String? = null
         val sharedPrefs = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
         val serverUrl = sharedPrefs.getString("SERVER_URL", "")!!
         val username = sharedPrefs.getString("USERNAME", "")!!
         val password = sharedPrefs.getString("PASSWORD", "")!!
 
-        if (type == "movie") {
-            val item = gson.fromJson(itemJson, Movie::class.java)
-            currentContent = item
-            playbackUrl = "$serverUrl/movie/$username/$password/${item.streamId}.${item.containerExtension}"
-            title = item.name
-            val historyItem = HistoryItem(item, 0, 0)
-            HistoryManager.addItemToHistory(this, historyItem)
-        }
+        val item = gson.fromJson(itemJson, Movie::class.java)
+        currentContent = item
+        val playbackUrl = "$serverUrl/movie/$username/$password/${item.streamId}.${item.containerExtension}"
 
-        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = title
+        updatePlayerTitle(item.name)
         initializePlayer(playbackUrl)
     }
 
@@ -158,10 +149,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val password = sharedPrefs.getString("PASSWORD", "")!!
 
         val playbackUrl = "$serverUrl/live/$username/$password/${item.streamId}.m3u8"
-        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = item.name
-
-        val historyItem = HistoryItem(item, 0, 0)
-        HistoryManager.addItemToHistory(this, historyItem)
+        updatePlayerTitle(item.name)
         initializePlayer(playbackUrl)
     }
 
@@ -177,8 +165,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
         val playbackUrl = "$serverUrl/series/$username/$password/${item.id}.${item.containerExtension}"
         val titleText = "$seriesTitle: T${item.episodeNum} E${item.episodeNum} - ${item.title}"
-        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = titleText
-
+        updatePlayerTitle(titleText)
         initializePlayer(playbackUrl)
     }
 
@@ -188,7 +175,6 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
         val loadControl = DefaultLoadControl.Builder().build()
         val userAgent = SettingsManager.getUserAgent(this)
-
         val mediaSourceFactory = HlsMediaSource.Factory(DefaultHttpDataSource.Factory().setUserAgent(userAgent))
 
         player = ExoPlayer.Builder(this)
@@ -203,13 +189,28 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                 exoPlayer.seekTo(startPosition)
                 exoPlayer.prepare()
                 exoPlayer.playWhenReady = true
-                exoPlayer.addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED) handlePlaybackEnd()
-                    }
-                })
+                exoPlayer.addListener(playerListener)
                 binding.playerView.post { setupCustomControls() }
             }
+    }
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) handlePlaybackEnd()
+        }
+
+        override fun onTracksChanged(tracks: Tracks) {
+            val trackButton = binding.playerView.findViewById<ImageButton>(R.id.btn_more_options)
+
+            var hasSelectableTracks = false
+            for (group in tracks.groups) {
+                if (group.isSupported) {
+                    hasSelectableTracks = true
+                    break
+                }
+            }
+            trackButton?.visibility = if (hasSelectableTracks) View.VISIBLE else View.GONE
+        }
     }
 
     private fun handlePlaybackEnd() {
@@ -231,16 +232,31 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     }
 
     private fun showMoreOptionsDialog() {
-        val options = arrayOf("Relación de Aspecto", "Audio y Subtítulos", "Picture-in-Picture")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, options)
+        val options = mutableListOf("Relación de Aspecto")
+
+        var hasSelectableTracks = false
+        player?.currentTracks?.groups?.let {
+            for (group in it) {
+                if (group.isSupported) {
+                    hasSelectableTracks = true
+                    break
+                }
+            }
+        }
+
+        if (hasSelectableTracks) {
+            options.add("Audio y Subtítulos")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            options.add("Picture-in-Picture")
+        }
 
         AlertDialog.Builder(this)
-            .setTitle("Opciones")
-            .setAdapter(adapter) { dialog, which ->
-                when (which) {
-                    0 -> toggleAspectRatio()
-                    1 -> showTrackSelectionDialog()
-                    2 -> enterPiPMode()
+            .setItems(options.toTypedArray()) { dialog, which ->
+                when (options[which]) {
+                    "Relación de Aspecto" -> toggleAspectRatio()
+                    "Audio y Subtítulos" -> showTrackSelectionDialog()
+                    "Picture-in-Picture" -> enterPiPMode()
                 }
                 dialog.dismiss()
             }
@@ -252,7 +268,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val player = this.player ?: return
         val trackGroups = player.currentTracks.groups
         if (trackGroups.isEmpty()) {
-            Toast.makeText(this, "No hay pistas de audio o subtítulos disponibles.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No hay pistas disponibles.", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -262,14 +278,14 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         var audioGroupIndex = -1
         var subtitleGroupIndex = -1
 
-        for ((groupIndex, trackGroup) in trackGroups.withIndex()) {
+        trackGroups.forEachIndexed { groupIndex, trackGroup ->
             if (trackGroup.type == C.TRACK_TYPE_AUDIO) {
                 audioGroupIndex = groupIndex
                 for (i in 0 until trackGroup.length) {
                     val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Audio #${i + 1}"
-                    val radioButton = RadioButton(this).apply { text = label; id = i }
+                    val radioButton = RadioButton(this).apply { text = label; id = i; setTextColor(resources.getColor(R.color.light_text, null)) }
                     if (trackGroup.isTrackSelected(i)) radioButton.isChecked = true
                     audioGroup.addView(radioButton)
                 }
@@ -279,21 +295,21 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                     val format = trackGroup.getTrackFormat(i)
                     val lang = format.language
                     val label = format.label ?: lang?.let { Locale.forLanguageTag(it).displayLanguage } ?: "Subtítulos #${i + 1}"
-                    val radioButton = RadioButton(this).apply { text = label; id = i }
+                    val radioButton = RadioButton(this).apply { text = label; id = i; setTextColor(resources.getColor(R.color.light_text, null)) }
                     if (trackGroup.isTrackSelected(i)) radioButton.isChecked = true
                     subtitleGroup.addView(radioButton)
                 }
             }
         }
 
-        val noSubsButton = RadioButton(this).apply { text = getString(R.string.disabled); id = -1 }
-        if (subtitleGroup.childCount == 0 || subtitleGroup.checkedRadioButtonId == -1) noSubsButton.isChecked = true
+        val noSubsButton = RadioButton(this).apply { text = getString(R.string.disabled); id = -1; setTextColor(resources.getColor(R.color.light_text, null)) }
+        if (!player.currentTracks.isTypeSelected(C.TRACK_TYPE_TEXT)) noSubsButton.isChecked = true
         subtitleGroup.addView(noSubsButton, 0)
 
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.audio_and_subtitles))
             .setView(dialogView)
-            .setPositiveButton(getString(android.R.string.ok)) { dialog, _ ->
+            .setPositiveButton(android.R.string.ok) { dialog, _ ->
                 val newParams = player.trackSelectionParameters.buildUpon()
                 if (audioGroupIndex != -1 && audioGroup.checkedRadioButtonId != -1) {
                     newParams.setOverrideForType(
@@ -314,12 +330,13 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                 player.trackSelectionParameters = newParams.build()
                 dialog.dismiss()
             }
-            .setNegativeButton(getString(android.R.string.cancel), null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
     private fun playNextEpisode() {
         if (currentIndex < seriesPlaylist.size - 1) {
+            startPosition = 0L
             playItemFromSeriesPlaylist(currentIndex + 1)
         } else {
             Toast.makeText(this, R.string.end_of_season, Toast.LENGTH_SHORT).show()
@@ -327,18 +344,16 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         }
     }
 
+    private fun updatePlayerTitle(title: String) {
+        binding.playerView.findViewById<TextView>(R.id.tv_content_title_player)?.text = title
+    }
+
     private fun toggleFullscreen() {
-        if (isFullscreen) exitFullscreen() else enterFullscreen()
-    }
-
-    @SuppressLint("SourceLockedOrientationActivity")
-    private fun enterFullscreen() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-    }
-
-    @SuppressLint("SourceLockedOrientationActivity")
-    private fun exitFullscreen() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        requestedOrientation = if (isFullscreen) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -347,12 +362,11 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     }
 
     private fun handleConfigurationChange(config: Configuration) {
-        if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+        isFullscreen = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (isFullscreen) {
             hideSystemUi()
-            isFullscreen = true
         } else {
             showSystemUi()
-            isFullscreen = false
         }
         binding.playerView.post { setupCustomControls() }
     }
@@ -372,6 +386,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     private fun releasePlayer() {
         saveHistory()
+        player?.removeListener(playerListener)
         player?.release()
         player = null
     }
@@ -387,19 +402,28 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (player == null) {
+            processIntent()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
-        if (player == null) {
-            if (livePlaylist.isNotEmpty()) playItemFromLivePlaylist(currentIndex)
-            else if (seriesPlaylist.isNotEmpty()) playItemFromSeriesPlaylist(currentIndex)
-        }
+        player?.playWhenReady = true
     }
 
     override fun onPause() {
         super.onPause()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
-            // No liberar el reproductor si estamos en modo PiP
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) {
+            player?.playWhenReady = false
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !isInPictureInPictureMode) {
             releasePlayer()
         }
     }
@@ -411,16 +435,9 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
     private fun initVolumeAndBrightness() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        try {
-            currentBrightness = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
-        } catch (e: Settings.SettingNotFoundException) {
-            e.printStackTrace()
-        }
     }
 
     override fun onSingleTap() {
-        // CORREGIDO: Se usa la propiedad correcta de Media3.
         if (binding.playerView.isControllerFullyVisible) {
             binding.playerView.hideController()
         } else {
@@ -430,10 +447,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     override fun onDoubleTap(isLeft: Boolean) {
         if (isLeft) {
-            player?.seekTo(player!!.currentPosition - 10000)
+            player?.seekBack()
             showSeekAnimation(binding.replayContainer)
         } else {
-            player?.seekTo(player!!.currentPosition + 10000)
+            player?.seekForward()
             showSeekAnimation(binding.forwardContainer)
         }
     }
@@ -459,12 +476,15 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
         val sensitivity = 1.5f
         val screenHeight = binding.root.height
         if (screenHeight == 0) return
+
         if (isLeft) {
-            currentBrightness -= (distanceY / screenHeight) * sensitivity
-            currentBrightness = currentBrightness.coerceIn(0.0f, 1.0f)
-            setBrightness(currentBrightness)
-            showIndicator(true, (currentBrightness * 100).toInt())
+            val currentBrightness = window.attributes.screenBrightness.takeIf { it > 0 } ?: 0.5f
+            var newBrightness = currentBrightness - (distanceY / screenHeight) * sensitivity
+            newBrightness = newBrightness.coerceIn(0.0f, 1.0f)
+            setBrightness(newBrightness)
+            showIndicator(true, (newBrightness * 100).toInt())
         } else {
+            var currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             val delta = -(distanceY / screenHeight) * maxVolume * sensitivity
             currentVolume += delta.toInt()
             currentVolume = currentVolume.coerceIn(0, maxVolume)
@@ -481,13 +501,16 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     private fun showIndicator(isBrightness: Boolean, progress: Int) {
         val indicatorLayout = if (isBrightness) binding.brightnessIndicator else binding.volumeIndicator
-        val icon = indicatorLayout.indicatorIcon
-        val progressBar = indicatorLayout.indicatorProgress
-        val indicatorView = indicatorLayout.root
-        icon.setImageResource(if (isBrightness) R.drawable.ic_brightness else R.drawable.ic_volume)
-        progressBar.progress = progress
-        indicatorView.visibility = View.VISIBLE
-        indicatorView.postDelayed({ indicatorView.visibility = View.GONE }, 1500)
+        indicatorLayout.indicatorIcon.setImageResource(if (isBrightness) R.drawable.ic_brightness else R.drawable.ic_volume)
+        indicatorLayout.indicatorProgress.progress = progress
+        indicatorLayout.root.visibility = View.VISIBLE
+        indicatorLayout.root.removeCallbacks(hideIndicatorRunnable)
+        indicatorLayout.root.postDelayed(hideIndicatorRunnable, 1500)
+    }
+
+    private val hideIndicatorRunnable = Runnable {
+        binding.brightnessIndicator.root.visibility = View.GONE
+        binding.volumeIndicator.root.visibility = View.GONE
     }
 
     private fun toggleAspectRatio() {
@@ -500,11 +523,10 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
                 Toast.makeText(this, "Rellenar", Toast.LENGTH_SHORT).show()
                 AspectRatioFrameLayout.RESIZE_MODE_FILL
             }
-            AspectRatioFrameLayout.RESIZE_MODE_FILL -> {
+            else -> {
                 Toast.makeText(this, "Ajustar", Toast.LENGTH_SHORT).show()
                 AspectRatioFrameLayout.RESIZE_MODE_FIT
             }
-            else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         binding.playerView.resizeMode = currentResizeMode
     }
@@ -518,9 +540,7 @@ class PlayerActivity : AppCompatActivity(), GestureControlView.GestureListener {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        if (isInPictureInPictureMode) {
-            binding.playerView.hideController()
-        }
+        binding.playerView.useController = !isInPictureInPictureMode
     }
 
     private fun enterPiPMode() {

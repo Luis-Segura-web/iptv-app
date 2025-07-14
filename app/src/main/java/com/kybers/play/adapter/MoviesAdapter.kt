@@ -3,23 +3,30 @@ package com.kybers.play.adapter
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.kybers.play.R
 import com.kybers.play.api.Movie
 import com.kybers.play.databinding.ItemMovieBinding
 
+/**
+ * Adaptador para mostrar una lista de películas en un RecyclerView.
+ * Utiliza ListAdapter con DiffUtil para manejar eficientemente las actualizaciones de la lista.
+ */
 class MoviesAdapter(
-    private var movies: MutableList<Movie>, // Cambiado a MutableList
     private val onItemClick: (Movie) -> Unit
-) : RecyclerView.Adapter<MoviesAdapter.ViewHolder>() {
+) : ListAdapter<Movie, MoviesAdapter.ViewHolder>(MovieDiffCallback()) {
 
+    /**
+     * ViewHolder que contiene la vista de un solo item de película.
+     */
     inner class ViewHolder(val binding: ItemMovieBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(movie: Movie) {
             binding.tvMovieTitle.text = movie.name
             Glide.with(binding.ivMoviePoster.context)
                 .load(movie.streamIcon)
-                .placeholder(R.drawable.ic_movie)
+                .placeholder(R.drawable.ic_movie) // Imagen por defecto mientras carga
                 .into(binding.ivMoviePoster)
 
             binding.root.setOnClickListener { onItemClick(movie) }
@@ -32,38 +39,22 @@ class MoviesAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(movies[position])
-    }
-
-    override fun getItemCount() = movies.size
-
-    // CORREGIDO: Usamos DiffUtil para actualizaciones eficientes
-    fun updateMovies(newMoviesList: List<Movie>) {
-        val diffCallback = MovieDiffCallback(this.movies, newMoviesList)
-        val diffResult = DiffUtil.calculateDiff(diffCallback)
-
-        this.movies.clear()
-        this.movies.addAll(newMoviesList)
-        diffResult.dispatchUpdatesTo(this)
+        holder.bind(getItem(position))
     }
 }
 
-// Clase para calcular las diferencias entre la lista vieja y la nueva
-class MovieDiffCallback(
-    private val oldList: List<Movie>,
-    private val newList: List<Movie>
-) : DiffUtil.Callback() {
-
-    override fun getOldListSize(): Int = oldList.size
-    override fun getNewListSize(): Int = newList.size
-
-    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        // Comparamos por ID, que es único para cada película
-        return oldList[oldItemPosition].streamId == newList[newItemPosition].streamId
+/**
+ * Callback para que DiffUtil calcule las diferencias entre dos listas de películas.
+ * Esto permite animaciones y actualizaciones eficientes sin tener que recargar toda la lista.
+ */
+class MovieDiffCallback : DiffUtil.ItemCallback<Movie>() {
+    override fun areItemsTheSame(oldItem: Movie, newItem: Movie): Boolean {
+        // Los items son los mismos si sus IDs son iguales.
+        return oldItem.streamId == newItem.streamId
     }
 
-    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        // Comparamos el contenido completo del objeto
-        return oldList[oldItemPosition] == newList[newItemPosition]
+    override fun areContentsTheSame(oldItem: Movie, newItem: Movie): Boolean {
+        // El contenido es el mismo si los objetos son idénticos.
+        return oldItem == newItem
     }
 }

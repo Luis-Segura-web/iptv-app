@@ -24,11 +24,15 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
+    <!-- Tema para actividades que no necesitan una barra de acción colapsable -->
+    <style name="Theme.Play.NoActionBar" parent="Theme.Play" />
+
     <!-- Estilo para los encabezados de Ajustes -->
     <style name="SettingsHeader" parent="Widget.AppCompat.TextView">
         <item name="android:textColor">@color/red_accent</item>
         <item name="android:textStyle">bold</item>
         <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:layout_marginTop">16dp</item>
     </style>
 
     <!-- Estilo para los items de Ajustes -->

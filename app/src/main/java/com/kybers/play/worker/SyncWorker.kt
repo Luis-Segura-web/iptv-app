@@ -1,60 +1,75 @@
 package com.kybers.play.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.kybers.play.api.RetrofitClient
 import com.kybers.play.api.XtreamApiService
 import com.kybers.play.database.AppDatabase
-import com.kybers.play.database.ContentDao
+import com.kybers.play.manager.DataCacheManager
+import com.kybers.play.repository.ContentRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-class SyncWorker(appContext: Context, workerParams: WorkerParameters): CoroutineWorker(appContext, workerParams) {
+/**
+ * Un CoroutineWorker que se encarga de sincronizar todos los datos
+ * del servidor en segundo plano.
+ */
+class SyncWorker(
+    appContext: Context,
+    workerParams: WorkerParameters
+) : CoroutineWorker(appContext, workerParams) {
 
-    companion object {
-        const val WORK_NAME = "SyncContentWorker"
-    }
-
+    /**
+     * Esta es la función que se ejecuta en segundo plano.
+     */
     override suspend fun doWork(): Result {
-        val database = AppDatabase.getDatabase(applicationContext)
-        val contentDao = database.contentDao()
+        Log.d("SyncWorker", "Iniciando trabajo de sincronización en segundo plano.")
+        val sharedPreferences = applicationContext.getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
+        val serverUrl = sharedPreferences.getString("SERVER_URL", null)
+        val username = sharedPreferences.getString("USERNAME", null)
+        val password = sharedPreferences.getString("PASSWORD", null)
 
-        val prefs = applicationContext.getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
-        val serverUrl = prefs.getString("SERVER_URL", null)
-        val username = prefs.getString("USERNAME", null)
-        val password = prefs.getString("PASSWORD", null)
-
-        if (serverUrl == null || username == null || password == null) {
-            return Result.failure() // No se puede sincronizar sin credenciales
+        // Si no hay credenciales, no podemos hacer nada.
+        if (serverUrl.isNullOrBlank() || username.isNullOrBlank() || password.isNullOrBlank()) {
+            Log.e("SyncWorker", "No se encontraron credenciales, no se puede sincronizar.")
+            return Result.failure()
         }
 
-        val apiService = RetrofitClient.getClient(serverUrl).create(XtreamApiService::class.java)
+        return withContext(Dispatchers.IO) {
+            try {
+                // Preparamos todas las herramientas que necesitamos.
+                val apiService = RetrofitClient.getClient(serverUrl).create(XtreamApiService::class.java)
+                val dao = AppDatabase.getDatabase(applicationContext).contentDao()
+                val repository = ContentRepository(apiService, dao)
 
-        return try {
-            // Limpiar caché antiguo
-            contentDao.clearAllLiveStreams()
-            contentDao.clearAllMovies()
-            contentDao.clearAllSeries()
+                // 1. Limpiamos el caché antiguo para asegurar datos frescos.
+                Log.d("SyncWorker", "Limpiando caché antiguo...")
+                dao.clearAllLiveStreams()
+                dao.clearAllMovies()
+                dao.clearAllSeries()
 
-            // Descargar y guardar el nuevo contenido
-            // CORREGIDO: Añadimos categoryId = "*" para obtener todo el contenido
-            val liveResponse = apiService.getLiveStreams(username, password, categoryId = "*")
-            if (liveResponse.isSuccessful) {
-                contentDao.insertAllLiveStreams(liveResponse.body() ?: emptyList())
+                // 2. Descargamos y guardamos todo de nuevo.
+                Log.d("SyncWorker", "Sincronizando TV en vivo...")
+                val liveCategories = repository.getLiveStreams(username, password, "*") // Usamos '*' para intentar obtener todo.
+
+                Log.d("SyncWorker", "Sincronizando películas...")
+                val movies = repository.getMovies(username, password)
+
+                Log.d("SyncWorker", "Sincronizando series...")
+                val series = repository.getSeries(username, password)
+
+                // Actualizamos la marca de tiempo del caché de TV.
+                DataCacheManager.updateTvSyncTimestamp(applicationContext)
+
+                Log.d("SyncWorker", "Sincronización completada exitosamente.")
+                Result.success()
+
+            } catch (e: Exception) {
+                Log.e("SyncWorker", "La sincronización en segundo plano falló", e)
+                Result.failure()
             }
-
-            val movieResponse = apiService.getVodStreams(username, password, categoryId = "*")
-            if (movieResponse.isSuccessful) {
-                contentDao.insertAllMovies(movieResponse.body() ?: emptyList())
-            }
-
-            val seriesResponse = apiService.getSeries(username, password, categoryId = "*")
-            if (seriesResponse.isSuccessful) {
-                contentDao.insertAllSeries(seriesResponse.body() ?: emptyList())
-            }
-
-            Result.success()
-        } catch (e: Exception) {
-            Result.retry() // Reintentar más tarde si falla la conexión
         }
     }
 }

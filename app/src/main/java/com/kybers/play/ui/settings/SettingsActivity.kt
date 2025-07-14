@@ -12,6 +12,9 @@ import androidx.lifecycle.lifecycleScope
 import com.kybers.play.LoginActivity
 import com.kybers.play.database.AppDatabase
 import com.kybers.play.databinding.ActivitySettingsBinding
+import com.kybers.play.manager.FavoritesManager
+import com.kybers.play.manager.HistoryManager
+import com.kybers.play.manager.LiveFavoritesManager
 import com.kybers.play.manager.SettingsManager
 import kotlinx.coroutines.launch
 
@@ -24,6 +27,7 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Configura la barra de herramientas con el botón de "atrás".
         setSupportActionBar(binding.toolbarSettings)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbarSettings.setNavigationOnClickListener { finish() }
@@ -32,31 +36,45 @@ class SettingsActivity : AppCompatActivity() {
         loadSettings()
     }
 
+    /**
+     * Configura todos los listeners para los elementos de la UI.
+     */
     private fun setupListeners() {
+        // Listener para el switch de auto-reproducción.
         binding.switchAutoplay.setOnCheckedChangeListener { _, isChecked ->
             SettingsManager.setAutoplayNextEpisode(this, isChecked)
         }
 
+        // Listener para el botón de User-Agent.
         binding.btnUserAgent.setOnClickListener {
             showUserAgentDialog()
         }
 
+        // Listener para el botón de limpiar caché.
         binding.btnClearCache.setOnClickListener {
             showClearCacheConfirmation()
         }
 
+        // Listener para el botón de cerrar sesión.
         binding.btnLogout.setOnClickListener {
             showLogoutConfirmation()
         }
     }
 
+    /**
+     * Carga el estado actual de los ajustes y lo refleja en la UI.
+     */
     private fun loadSettings() {
         binding.switchAutoplay.isChecked = SettingsManager.isAutoplayNextEpisodeEnabled(this)
     }
 
+    /**
+     * Muestra un diálogo para que el usuario edite el User-Agent.
+     */
     private fun showUserAgentDialog() {
-        val editText = EditText(this)
-        editText.setText(SettingsManager.getUserAgent(this))
+        val editText = EditText(this).apply {
+            setText(SettingsManager.getUserAgent(this@SettingsActivity))
+        }
 
         AlertDialog.Builder(this)
             .setTitle("User-Agent")
@@ -74,6 +92,9 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Muestra un diálogo de confirmación antes de limpiar el caché.
+     */
     private fun showClearCacheConfirmation() {
         AlertDialog.Builder(this)
             .setTitle("Limpiar Caché")
@@ -86,6 +107,9 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Ejecuta la limpieza de la base de datos en una corutina.
+     */
     private fun clearCache() {
         lifecycleScope.launch {
             val dao = AppDatabase.getDatabase(this@SettingsActivity).contentDao()
@@ -96,10 +120,13 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Muestra un diálogo de confirmación antes de cerrar la sesión.
+     */
     private fun showLogoutConfirmation() {
         AlertDialog.Builder(this)
             .setTitle("Cerrar Sesión")
-            .setMessage("¿Estás seguro de que quieres cerrar la sesión?")
+            .setMessage("¿Estás seguro de que quieres cerrar la sesión? Se borrarán tus credenciales, favoritos e historial.")
             .setPositiveButton("Sí, cerrar sesión") { dialog, _ ->
                 logout()
                 dialog.dismiss()
@@ -108,12 +135,34 @@ class SettingsActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Cierra la sesión del usuario, borrando todos los datos guardados y
+     * redirigiendo a la pantalla de Login.
+     */
     private fun logout() {
+        // Borra las credenciales
         val sharedPreferences = getSharedPreferences("IPTV_PREFS", Context.MODE_PRIVATE)
-        // CORREGIDO: Usamos la función de extensión KTX
         sharedPreferences.edit {
             clear()
         }
+
+        // Borra los managers de datos del usuario
+        // (Esto se hace borrando sus respectivos SharedPreferences)
+        getSharedPreferences("IPTV_FAVORITES", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("IPTV_LIVE_FAVORITES", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("IPTV_HISTORY", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("IPTV_SETTINGS", Context.MODE_PRIVATE).edit().clear().apply()
+
+        // Borra el caché de la base de datos
+        lifecycleScope.launch {
+            AppDatabase.getDatabase(this@SettingsActivity).contentDao().apply {
+                clearAllLiveStreams()
+                clearAllMovies()
+                clearAllSeries()
+            }
+        }
+
+        // Redirige al Login y limpia la pila de actividades
         val intent = Intent(this, LoginActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         startActivity(intent)

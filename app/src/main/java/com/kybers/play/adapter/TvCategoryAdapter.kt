@@ -9,25 +9,19 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.kybers.play.R
-import com.kybers.play.api.Category
 import com.kybers.play.api.LiveStream
 import com.kybers.play.databinding.ItemTvCategoryBinding
 import com.kybers.play.databinding.ItemTvChannelBinding
 import com.kybers.play.manager.LiveFavoritesManager
 
-interface StickyHeaderInterface {
-    fun getHeaderPositionForItem(itemPosition: Int): Int
-    fun getHeaderLayout(headerPosition: Int): Int
-    fun bindHeaderData(header: View, headerPosition: Int)
-    fun isHeader(itemPosition: Int): Boolean
-}
+// CORREGIDO: Se ha eliminado la declaración duplicada de StickyHeaderInterface de este archivo.
+// Ahora se importa desde su propio archivo.
 
-data class CategoryWithChannels(
-    val category: Category,
-    val channels: MutableList<LiveStream>,
-    var isExpanded: Boolean = false
-)
-
+/**
+ * Adaptador para la lista de categorías y canales de TV.
+ * Es complejo porque maneja múltiples tipos de vista, estados de expansión,
+ * favoritos y la lógica para las cabeceras pegajosas.
+ */
 class TvCategoryAdapter(
     private val context: Context,
     private val onChannelClick: (LiveStream) -> Unit,
@@ -52,73 +46,45 @@ class TvCategoryAdapter(
         val clickedItem = dataList[clickedPosition] as? CategoryWithChannels ?: return
         val wasExpanded = clickedItem.isExpanded
         categoriesWithChannels.forEach { it.isExpanded = false }
-        if (!wasExpanded) clickedItem.isExpanded = true
+        if (!wasExpanded) {
+            clickedItem.isExpanded = true
+        }
         rebuildDataList()
         notifyDataSetChanged()
         val newPosition = dataList.indexOf(clickedItem)
-        if (newPosition != -1) onCategoryToggled(newPosition)
+        if (newPosition != -1) {
+            onCategoryToggled(newPosition)
+        }
     }
 
-    // CORREGIDO: Lógica de favoritos para no recargar toda la lista.
     fun toggleFavoriteStatus(channel: LiveStream) {
         val isCurrentlyFavorite = LiveFavoritesManager.isFavorite(context, channel)
 
-        // 1. Actualiza el estado persistente en el manager.
         if (isCurrentlyFavorite) {
             LiveFavoritesManager.removeFavorite(context, channel)
         } else {
             LiveFavoritesManager.addFavorite(context, channel)
         }
 
-        // 2. Actualiza el icono de la estrella en TODAS las apariciones visibles del canal.
         dataList.forEachIndexed { index, item ->
             if (item is LiveStream && item.streamId == channel.streamId) {
                 notifyItemChanged(index)
             }
         }
-
-        // 3. Añade o quita el canal de la lista de la categoría "Favoritos" de forma precisa.
-        updateFavoritesCategoryList(isCurrentlyFavorite, channel)
+        updateFavoritesCategoryList(!isCurrentlyFavorite, channel)
     }
 
-    private fun updateFavoritesCategoryList(wasFavorite: Boolean, channel: LiveStream) {
+    private fun updateFavoritesCategoryList(isNowFavorite: Boolean, channel: LiveStream) {
         val favoritesCategory = allCategoriesWithChannels.firstOrNull { it.category.categoryId == favoritesCategoryId } ?: return
 
-        if (wasFavorite) {
-            // El canal ERA favorito, ahora hay que QUITARLO de la lista de favoritos.
-            val indexInFavorites = favoritesCategory.channels.indexOfFirst { it.streamId == channel.streamId }
-            if (indexInFavorites != -1) {
-                // Lo quitamos de la lista de datos del adaptador si está visible.
-                if (favoritesCategory.isExpanded) {
-                    val headerPos = dataList.indexOf(favoritesCategory)
-                    val globalPos = headerPos + 1 + indexInFavorites
-                    if (globalPos < dataList.size && dataList[globalPos] is LiveStream) {
-                        dataList.removeAt(globalPos)
-                        notifyItemRemoved(globalPos)
-                    }
-                }
-                // Lo quitamos de la lista de canales interna de la categoría.
-                favoritesCategory.channels.removeAt(indexInFavorites)
-
-                // Si la categoría de favoritos queda vacía y está expandida, mostramos el mensaje.
-                if (favoritesCategory.channels.isEmpty() && favoritesCategory.isExpanded) {
-                    val headerPos = dataList.indexOf(favoritesCategory)
-                    if (headerPos != -1) {
-                        dataList.add(headerPos + 1, EmptyState(favoritesCategoryId))
-                        notifyItemInserted(headerPos + 1)
-                    }
-                }
-            }
-        } else {
-            // El canal NO ERA favorito, ahora hay que AÑADIRLO.
+        if (isNowFavorite) {
             if (!favoritesCategory.channels.any { it.streamId == channel.streamId }) {
                 val wasEmpty = favoritesCategory.channels.isEmpty()
-                favoritesCategory.channels.add(0, channel) // Añadir al principio de la lista de favoritos.
+                favoritesCategory.channels.add(0, channel)
 
                 if (favoritesCategory.isExpanded) {
                     val headerPos = dataList.indexOf(favoritesCategory)
                     if (headerPos != -1) {
-                        // Si estaba vacía, quitamos el mensaje de "vacío".
                         if (wasEmpty) {
                             val emptyPos = headerPos + 1
                             if (emptyPos < dataList.size && dataList[emptyPos] is EmptyState) {
@@ -126,8 +92,30 @@ class TvCategoryAdapter(
                                 notifyItemRemoved(emptyPos)
                             }
                         }
-                        // Insertamos el nuevo canal favorito en la lista visible.
                         dataList.add(headerPos + 1, channel)
+                        notifyItemInserted(headerPos + 1)
+                    }
+                }
+            }
+        } else {
+            val indexInFavorites = favoritesCategory.channels.indexOfFirst { it.streamId == channel.streamId }
+            if (indexInFavorites != -1) {
+                if (favoritesCategory.isExpanded) {
+                    val headerPos = dataList.indexOf(favoritesCategory)
+                    if (headerPos != -1) {
+                        val globalPos = headerPos + 1 + indexInFavorites
+                        if (globalPos < dataList.size && dataList[globalPos] is LiveStream) {
+                            dataList.removeAt(globalPos)
+                            notifyItemRemoved(globalPos)
+                        }
+                    }
+                }
+                favoritesCategory.channels.removeAt(indexInFavorites)
+
+                if (favoritesCategory.channels.isEmpty() && favoritesCategory.isExpanded) {
+                    val headerPos = dataList.indexOf(favoritesCategory)
+                    if (headerPos != -1) {
+                        dataList.add(headerPos + 1, EmptyState(favoritesCategoryId))
                         notifyItemInserted(headerPos + 1)
                     }
                 }
@@ -137,23 +125,15 @@ class TvCategoryAdapter(
 
     fun setNowPlaying(streamId: Int?, categoryId: String?) {
         val previousPlayingId = nowPlayingStreamId
-        val previousCategoryId = activeCategoryId
         nowPlayingStreamId = streamId
         activeCategoryId = categoryId
         findPositionByStreamId(previousPlayingId)?.let { notifyItemChanged(it) }
         findPositionByStreamId(nowPlayingStreamId)?.let { notifyItemChanged(it) }
-        findPositionByCategoryId(previousCategoryId)?.let { notifyItemChanged(it) }
-        findPositionByCategoryId(activeCategoryId)?.let { notifyItemChanged(it) }
     }
 
     private fun findPositionByStreamId(streamId: Int?): Int? {
         if (streamId == null) return null
         return dataList.indexOfFirst { it is LiveStream && it.streamId == streamId }.takeIf { it != -1 }
-    }
-
-    private fun findPositionByCategoryId(categoryId: String?): Int? {
-        if (categoryId == null) return null
-        return dataList.indexOfFirst { it is CategoryWithChannels && it.category.categoryId == categoryId }.takeIf { it != -1 }
     }
 
     fun submitList(list: List<CategoryWithChannels>) {
@@ -248,20 +228,20 @@ class TvCategoryAdapter(
 
     override fun bindHeaderData(header: View, headerPosition: Int) {
         val categoryItem = dataList[headerPosition] as CategoryWithChannels
-        val tvCategoryName = header.findViewById<TextView>(R.id.tv_category_name)
-        val ivExpandArrow = header.findViewById<android.widget.ImageView>(R.id.iv_expand_arrow)
-        tvCategoryName.text = categoryItem.category.categoryName
-        ivExpandArrow.rotation = if (categoryItem.isExpanded) 180f else 0f
-        if (categoryItem.category.categoryId == activeCategoryId) {
-            header.setBackgroundColor(ContextCompat.getColor(context, R.color.now_playing_category_background))
-        } else {
-            header.setBackgroundColor(ContextCompat.getColor(context, R.color.dark_surface))
-        }
+        header.findViewById<TextView>(R.id.tv_category_name).text = categoryItem.category.categoryName
+        header.findViewById<View>(R.id.iv_expand_arrow).rotation = if (categoryItem.isExpanded) 180f else 0f
     }
 
     override fun isHeader(itemPosition: Int): Boolean {
         if (itemPosition < 0 || itemPosition >= dataList.size) return false
         return dataList[itemPosition] is CategoryWithChannels
+    }
+
+    override fun onHeaderClick(position: Int) {
+        val headerPosition = getHeaderPositionForItem(position)
+        if (headerPosition != RecyclerView.NO_POSITION) {
+            handleCategoryClick(headerPosition)
+        }
     }
 
     inner class CategoryViewHolder(private val binding: ItemTvCategoryBinding) : RecyclerView.ViewHolder(binding.root) {
@@ -275,11 +255,6 @@ class TvCategoryAdapter(
         fun bind(categoryItem: CategoryWithChannels) {
             binding.tvCategoryName.text = categoryItem.category.categoryName
             binding.ivExpandArrow.rotation = if (categoryItem.isExpanded) 180f else 0f
-            if (categoryItem.category.categoryId == activeCategoryId) {
-                itemView.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.now_playing_category_background))
-            } else {
-                itemView.setBackgroundColor(ContextCompat.getColor(itemView.context, R.color.dark_surface))
-            }
         }
     }
 

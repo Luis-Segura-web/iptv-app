@@ -1,66 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="@color/dark_background"
     tools:context=".ui.movies.MoviesFragment">
 
-    <LinearLayout
-        android:id="@+id/controls_container_movies"
+    <!-- Barra de herramientas con título y buscador -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/app_bar_layout_movies"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        android:background="@color/dark_surface">
 
-        <Spinner
-            android:id="@+id/spinner_movie_categories"
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar_movies"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="16dp"
-            android:visibility="gone"
-            android:backgroundTint="@color/light_text"/>
+            android:layout_height="?attr/actionBarSize"
+            app:title="Películas"
+            app:titleTextColor="@color/light_text"/>
 
         <androidx.appcompat.widget.SearchView
             android:id="@+id/search_view_movies"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="8dp"
+            android:layout_margin="8dp"
             android:background="@drawable/search_view_bg"
+            app:queryHint="Buscar en películas..."
+            app:iconifiedByDefault="false"
             android:theme="@style/ThemeOverlay.AppCompat.Dark" />
-    </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler_view_movies"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/controls_container_movies"
-        android:padding="4dp"
-        android:visibility="gone"/>
+    </com.google.android.material.appbar.AppBarLayout>
 
-    <com.facebook.shimmer.ShimmerFrameLayout
-        android:id="@+id/shimmer_view_container_movies"
+    <!-- Contenedor para la lista y el estado de carga/vacío -->
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/controls_container_movies">
-        <GridLayout
+        android:layout_height="match_parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_view_movies"
             android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:padding="4dp"
+            tools:listitem="@layout/item_tv_category" />
+
+        <ProgressBar
+            android:id="@+id/progress_bar_movies"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:columnCount="3"
-            android:orientation="horizontal">
-            <include layout="@layout/placeholder_grid_item" />
-            <include layout="@layout/placeholder_grid_item" />
-            <include layout="@layout/placeholder_grid_item" />
-            <include layout="@layout/placeholder_grid_item" />
-            <include layout="@layout/placeholder_grid_item" />
-            <include layout="@layout/placeholder_grid_item" />
-        </GridLayout>
-    </com.facebook.shimmer.ShimmerFrameLayout>
+            android:layout_gravity="center"
+            android:visibility="gone"
+            tools:visibility="visible"/>
 
-    <!-- CORREGIDO: Añadido el ID al include -->
-    <include
-        android:id="@+id/empty_state_container"
-        layout="@layout/empty_state_layout"/>
+        <include
+            android:id="@+id/empty_state_container"
+            layout="@layout/empty_state_layout"/>
 
-</RelativeLayout>
+    </FrameLayout>
+</LinearLayout>

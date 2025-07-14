@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- CORREGIDO: Se añade el atributo 'android:name' para registrar nuestra clase Application personalizada. -->
     <application
         android:name=".MainApplication"
         android:allowBackup="true"
@@ -46,7 +47,8 @@
 
         <activity
             android:name=".ui.series.SeriesDetailActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:theme="@style/Theme.Play.NoActionBar" />
 
         <activity
             android:name=".ui.search.SearchActivity"

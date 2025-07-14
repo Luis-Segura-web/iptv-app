@@ -3,9 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#80000000">
 
-    <!-- Gradientes -->
+    <!-- Gradientes para mejorar la legibilidad del texto sobre el video -->
     <View
         android:layout_width="match_parent"
         android:layout_height="120dp"
@@ -31,6 +32,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/close"
             android:src="@drawable/ic_arrow_back"
             app:tint="@color/white" />
 
@@ -46,6 +48,15 @@
             android:textColor="@color/white"
             android:textSize="18sp"
             tools:text="Título del Contenido" />
+
+        <ImageButton
+            android:id="@+id/btn_more_options"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Más opciones"
+            android:src="@drawable/ic_more_vert"
+            app:tint="@color/white" />
     </LinearLayout>
 
     <!-- Controles Centrales -->
@@ -61,7 +72,7 @@
             style="@style/ExoMediaButton"
             android:layout_width="64dp"
             android:layout_height="64dp"
-            android:layout_marginEnd="48dp"
+            android:layout_marginEnd="32dp"
             android:src="@drawable/ic_replay_10" />
 
         <ImageButton
@@ -80,7 +91,7 @@
             style="@style/ExoMediaButton"
             android:layout_width="64dp"
             android:layout_height="64dp"
-            android:layout_marginStart="48dp"
+            android:layout_marginStart="32dp"
             android:src="@drawable/ic_forward_10" />
     </LinearLayout>
 
@@ -117,6 +128,7 @@
             android:layout_height="wrap_content"
             android:textColor="@color/white" />
 
+        <!-- La única diferencia clave: el icono para salir de pantalla completa -->
         <ImageButton
             android:id="@+id/btn_fullscreen"
             android:layout_width="48dp"

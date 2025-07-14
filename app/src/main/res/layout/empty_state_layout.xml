@@ -1,36 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/empty_state_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:visibility="gone">
+    android:visibility="gone"
+    tools:visibility="visible">
 
     <ImageView
         android:id="@+id/iv_empty_icon"
         android:layout_width="80dp"
         android:layout_height="80dp"
-        android:src="@drawable/ic_movie"
-        app:tint="@color/dark_text" />
+        app:tint="@color/dark_text"
+        tools:src="@drawable/ic_movie"
+        android:contentDescription="Icono de estado vacío"/>
 
     <TextView
         android:id="@+id/tv_empty_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="No se encontró contenido"
         android:textColor="@color/dark_text"
         android:textSize="16sp"
-        android:layout_marginTop="16dp"/>
+        android:layout_marginTop="16dp"
+        android:textAlignment="center"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        tools:text="No se encontró contenido."/>
 
-    <!-- BOTÓN DE REINTENTO AÑADIDO -->
     <Button
         android:id="@+id/btn_retry"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="Reintentar"
-        android:visibility="gone"/>
+        android:visibility="gone"
+        tools:visibility="visible"/>
 
 </LinearLayout>

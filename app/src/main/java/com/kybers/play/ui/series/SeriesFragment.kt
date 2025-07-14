@@ -3,6 +3,7 @@ package com.kybers.play.ui.series
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,8 +28,8 @@ class SeriesFragment : Fragment() {
     private val binding get() = _binding!!
 
     private lateinit var repository: ContentRepository
-    private var allSeries = listOf<Series>()
     private lateinit var seriesAdapter: SeriesAdapter
+    private var allSeries = listOf<Series>()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentSeriesBinding.inflate(inflater, container, false)
@@ -55,7 +56,7 @@ class SeriesFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        seriesAdapter = SeriesAdapter(mutableListOf()) { series ->
+        seriesAdapter = SeriesAdapter { series ->
             val intent = Intent(activity, SeriesDetailActivity::class.java).apply {
                 putExtra(SeriesDetailActivity.EXTRA_SERIES_ID, series.seriesId)
             }
@@ -67,25 +68,30 @@ class SeriesFragment : Fragment() {
 
     private fun loadAllSeries(username: String, password: String) {
         showLoading(true)
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             try {
+                Log.d("SeriesFragment", "Iniciando carga de series...")
                 val series = repository.getSeries(username, password)
+                Log.d("SeriesFragment", "Carga finalizada. Se encontraron ${series.size} series.")
                 showLoading(false)
+
                 if (series.isNotEmpty()) {
                     binding.recyclerViewSeries.visibility = View.VISIBLE
                     binding.emptyStateContainer.root.visibility = View.GONE
                     allSeries = series
-                    seriesAdapter.updateSeries(allSeries)
+                    seriesAdapter.submitList(allSeries)
                 } else {
-                    if (NetworkUtils.isNetworkAvailable(requireContext())) {
-                        showEmptyState("No se encontraron series.")
+                    val message = if (NetworkUtils.isNetworkAvailable(requireContext())) {
+                        "No se encontraron series en el servidor."
                     } else {
-                        showEmptyState("Sin conexión. No se pudo cargar la lista de series.")
+                        "Sin conexión. No se pudo cargar la lista de series."
                     }
+                    showEmptyState(message)
                 }
-            } catch (_: Exception) { // CORREGIDO
+            } catch (e: Exception) {
                 showLoading(false)
-                showEmptyState("Error al cargar las series.")
+                showEmptyState("Error al cargar series: ${e.message}")
+                Log.e("SeriesFragment", "Excepción al cargar series", e)
             }
         }
     }
@@ -95,7 +101,7 @@ class SeriesFragment : Fragment() {
             override fun onQueryTextSubmit(query: String?): Boolean = false
             override fun onQueryTextChange(newText: String?): Boolean {
                 val filteredList = allSeries.filter { it.name.contains(newText ?: "", ignoreCase = true) }
-                seriesAdapter.updateSeries(filteredList)
+                seriesAdapter.submitList(filteredList)
                 return true
             }
         })
@@ -118,9 +124,9 @@ class SeriesFragment : Fragment() {
         binding.shimmerViewContainerSeries.visibility = View.GONE
         binding.emptyStateContainer.root.visibility = View.VISIBLE
         binding.emptyStateContainer.tvEmptyMessage.text = message
-
-        val icon = if (NetworkUtils.isNetworkAvailable(requireContext())) R.drawable.ic_series else R.drawable.ic_no_internet
-        binding.emptyStateContainer.ivEmptyIcon.setImageResource(icon)
+        binding.emptyStateContainer.ivEmptyIcon.setImageResource(
+            if (NetworkUtils.isNetworkAvailable(requireContext())) R.drawable.ic_series else R.drawable.ic_no_internet
+        )
     }
 
     override fun onDestroyView() {

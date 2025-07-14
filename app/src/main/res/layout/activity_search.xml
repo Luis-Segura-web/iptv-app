@@ -19,7 +19,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:queryHint="Buscar canales, películas, series..."
-            app:iconifiedByDefault="false" />
+            app:iconifiedByDefault="false"
+            android:theme="@style/ThemeOverlay.AppCompat.Dark"/>
 
     </androidx.appcompat.widget.Toolbar>
 
@@ -36,5 +37,9 @@
         android:id="@+id/recycler_view_search"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
+
+    <include
+        android:id="@+id/empty_state_search"
+        layout="@layout/empty_state_layout" />
 
 </LinearLayout>

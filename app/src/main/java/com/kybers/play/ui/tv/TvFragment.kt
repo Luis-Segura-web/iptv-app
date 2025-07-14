@@ -1,34 +1,24 @@
 package com.kybers.play.ui.tv
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.widget.SearchView
-import androidx.coordinatorlayout.widget.CoordinatorLayout
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.BehindLiveWindowException
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.appbar.AppBarLayout
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.gson.Gson
 import com.kybers.play.PlayerActivity
 import com.kybers.play.R
 import com.kybers.play.adapter.CategoryWithChannels
@@ -41,14 +31,14 @@ import com.kybers.play.databinding.FragmentTvBinding
 import com.kybers.play.manager.DataCacheManager
 import com.kybers.play.manager.LiveFavoritesManager
 import com.kybers.play.ui.settings.SettingsActivity
+import com.kybers.play.util.NetworkUtils
+import com.kybers.play.util.StickyHeaderDecoration
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-@SuppressLint("ClickableViewAccessibility")
-@androidx.media3.common.util.UnstableApi
+@UnstableApi
 class TvFragment : Fragment() {
 
     private var _binding: FragmentTvBinding? = null
@@ -62,9 +52,6 @@ class TvFragment : Fragment() {
     private lateinit var serverUrl: String
 
     private var currentPlayingStream: LiveStream? = null
-    private val MAX_RETRIES = 5
-
-    private var currentStickyHeaderPosition = RecyclerView.NO_POSITION
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -92,11 +79,9 @@ class TvFragment : Fragment() {
         setupToolbar()
         setupRecyclerView()
         setupSearch()
-        binding.btnRetry.setOnClickListener {
-            loadInitialData()
+        binding.emptyStateLayout.btnRetry.setOnClickListener {
+            loadDataFromServer(isSilent = false)
         }
-
-        handleScreenOrientation(resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
     }
 
     private fun setupToolbar() {
@@ -115,10 +100,12 @@ class TvFragment : Fragment() {
                     .scrollToPositionWithOffset(position, 0)
             }
         )
-        binding.recyclerViewTv.layoutManager = LinearLayoutManager(context)
-        binding.recyclerViewTv.adapter = tvCategoryAdapter
-
-        setupStickyHeader()
+        binding.recyclerViewTv.apply {
+            layoutManager = LinearLayoutManager(context)
+            adapter = tvCategoryAdapter
+            // CORREGIDO: Le pasamos la instancia del RecyclerView al constructor de la decoración.
+            addItemDecoration(StickyHeaderDecoration(tvCategoryAdapter, this))
+        }
     }
 
     private fun setupSearch() {
@@ -129,60 +116,6 @@ class TvFragment : Fragment() {
                 return true
             }
         })
-    }
-
-    private fun setupStickyHeader() {
-        binding.recyclerViewTv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                val layoutManager = recyclerView.layoutManager as LinearLayoutManager
-                val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
-                if (firstVisibleItemPosition == RecyclerView.NO_POSITION) {
-                    binding.stickyHeaderView.root.visibility = View.GONE
-                    return
-                }
-
-                val headerPosition = tvCategoryAdapter.getHeaderPositionForItem(firstVisibleItemPosition)
-
-                if (headerPosition != RecyclerView.NO_POSITION) {
-                    if (currentStickyHeaderPosition != headerPosition) {
-                        currentStickyHeaderPosition = headerPosition
-                        tvCategoryAdapter.bindHeaderData(binding.stickyHeaderView.root, headerPosition)
-                    }
-                    binding.stickyHeaderView.root.visibility = View.VISIBLE
-
-                    val nextHeaderView = findNextHeaderView(layoutManager, firstVisibleItemPosition)
-                    if (nextHeaderView != null && nextHeaderView.top <= binding.stickyHeaderView.root.height) {
-                        val translation = nextHeaderView.top - binding.stickyHeaderView.root.height
-                        binding.stickyHeaderView.root.translationY = translation.toFloat()
-                    } else {
-                        binding.stickyHeaderView.root.translationY = 0f
-                    }
-
-                } else {
-                    binding.stickyHeaderView.root.visibility = View.GONE
-                    currentStickyHeaderPosition = RecyclerView.NO_POSITION
-                }
-            }
-        })
-
-        binding.stickyHeaderView.root.setOnClickListener {
-            if (currentStickyHeaderPosition != RecyclerView.NO_POSITION) {
-                tvCategoryAdapter.handleCategoryClick(currentStickyHeaderPosition)
-                tvCategoryAdapter.bindHeaderData(binding.stickyHeaderView.root, currentStickyHeaderPosition)
-            }
-        }
-    }
-
-    private fun findNextHeaderView(layoutManager: LinearLayoutManager, firstVisibleItemPosition: Int): View? {
-        for (i in 0 until layoutManager.childCount) {
-            val child = layoutManager.getChildAt(i)
-            val position = layoutManager.getPosition(child!!)
-            if (position > firstVisibleItemPosition && tvCategoryAdapter.isHeader(position)) {
-                return child
-            }
-        }
-        return null
     }
 
     private fun initializePlayer() {
@@ -197,14 +130,14 @@ class TvFragment : Fragment() {
                             exoPlayer.prepare()
                         } else {
                             Toast.makeText(context, "Error de reproducción", Toast.LENGTH_SHORT).show()
+                            Log.e("TvFragmentPlayer", "Error: ${error.message}")
                         }
                     }
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         binding.playerBuffering.visibility = if (playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
                     }
                 })
-                // CORREGIDO: Un solo toque en el contenedor abre la pantalla completa.
-                binding.playerContainer.setOnClickListener {
+                binding.playerClickOverlay.setOnClickListener {
                     openPlayerActivity()
                 }
             }
@@ -214,7 +147,7 @@ class TvFragment : Fragment() {
     private fun openPlayerActivity() {
         currentPlayingStream?.let { stream ->
             val intent = Intent(activity, PlayerActivity::class.java).apply {
-                putExtra(PlayerActivity.EXTRA_ITEM_JSON, com.google.gson.Gson().toJson(stream))
+                putExtra(PlayerActivity.EXTRA_ITEM_JSON, Gson().toJson(stream))
                 putExtra(PlayerActivity.EXTRA_ITEM_TYPE, "live")
                 putExtra(PlayerActivity.EXTRA_START_POSITION, player?.currentPosition ?: 0)
             }
@@ -223,6 +156,7 @@ class TvFragment : Fragment() {
     }
 
     private fun playStream(stream: LiveStream) {
+        binding.playerContainer.visibility = View.VISIBLE
         currentPlayingStream = stream
         tvCategoryAdapter.setNowPlaying(stream.streamId, stream.categoryId)
 
@@ -232,134 +166,96 @@ class TvFragment : Fragment() {
         player?.setMediaItem(mediaItem)
         player?.prepare()
 
-        binding.toolbarTv.title = "TV: ${stream.name}"
+        binding.toolbarTv.title = stream.name
     }
 
     private fun loadInitialData() {
         if (_binding == null) return
-        if (DataCacheManager.tvCategories.isNullOrEmpty()) {
-            DataCacheManager.tvCategories = DataCacheManager.loadTvCacheFromFile(requireContext())
+
+        val fileData = DataCacheManager.loadTvCacheFromFile(requireContext())
+        if (!fileData.isNullOrEmpty()) {
+            DataCacheManager.tvCategories = fileData
+            prepareAndSubmitList(fileData)
         }
-        val baseCategories = DataCacheManager.tvCategories ?: emptyList()
-        prepareAndSubmitList(baseCategories)
-        val isCacheEmpty = baseCategories.isEmpty()
-        if (isCacheEmpty || DataCacheManager.isTvCacheStale(requireContext())) {
-            loadDataFromServer(isSilent = !isCacheEmpty)
+
+        if (DataCacheManager.tvCategories.isNullOrEmpty() || DataCacheManager.isTvCacheStale(requireContext())) {
+            loadDataFromServer(isSilent = !DataCacheManager.tvCategories.isNullOrEmpty())
         }
     }
 
     private fun prepareAndSubmitList(baseList: List<CategoryWithChannels>) {
-        if (context == null) return
+        if (context == null || !isAdded) return
         val finalList = mutableListOf<CategoryWithChannels>()
         val favoriteChannels = LiveFavoritesManager.getFavorites(requireContext())
-        val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
-        finalList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
+        if (favoriteChannels.isNotEmpty()) {
+            val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
+            finalList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
+        }
         finalList.addAll(baseList.filter { it.category.categoryId != "favorites" })
         tvCategoryAdapter.submitList(finalList)
-        binding.emptyStateLayout.visibility = if (finalList.size <= 1 && finalList.first().channels.isEmpty()) View.VISIBLE else View.GONE
+        binding.emptyStateLayout.root.visibility = if (finalList.isEmpty()) View.VISIBLE else View.GONE
         binding.progressBarTv.visibility = View.GONE
     }
 
     private fun loadDataFromServer(isSilent: Boolean) {
-        if (_binding == null) return
+        if (_binding == null || !NetworkUtils.isNetworkAvailable(requireContext())) {
+            if (!isSilent) showErrorState("Sin conexión a internet.")
+            return
+        }
+
         if (!isSilent) {
-            binding.emptyStateLayout.visibility = View.GONE
+            binding.emptyStateLayout.root.visibility = View.GONE
             binding.progressBarTv.visibility = View.VISIBLE
         }
+
         viewLifecycleOwner.lifecycleScope.launch {
-            var success = false
-            for (attempt in 1..MAX_RETRIES) {
-                try {
-                    val categoriesResponse = apiService.getLiveCategories(username, password)
-                    if (categoriesResponse.isSuccessful) {
-                        val apiCategories = categoriesResponse.body() ?: emptyList()
-                        val apiCategoriesWithChannels = apiCategories.map { category ->
-                            async {
+            try {
+                val categoriesResponse = apiService.getLiveCategories(username, password)
+                if (categoriesResponse.isSuccessful) {
+                    val apiCategories = categoriesResponse.body() ?: emptyList()
+                    val apiCategoriesWithChannels = apiCategories.map { category ->
+                        async {
+                            try {
                                 val channelsResponse = apiService.getLiveStreams(username, password, categoryId = category.categoryId)
                                 if (channelsResponse.isSuccessful) {
                                     CategoryWithChannels(category, (channelsResponse.body() ?: emptyList()).toMutableList())
-                                } else { null }
+                                } else {
+                                    Log.e("TvFragment", "Error al cargar canales para categoría ${category.categoryName}: ${channelsResponse.code()}")
+                                    null
+                                }
+                            } catch (e: Exception) {
+                                Log.e("TvFragment", "Excepción al cargar canales para ${category.categoryName}", e)
+                                null
                             }
-                        }.awaitAll().filterNotNull()
-                        if (isActive) {
-                            DataCacheManager.tvCategories = apiCategoriesWithChannels
-                            DataCacheManager.saveTvCacheToFile(requireContext(), apiCategoriesWithChannels)
-                            DataCacheManager.updateTvSyncTimestamp(requireContext())
-                            prepareAndSubmitList(apiCategoriesWithChannels)
                         }
-                        success = true
-                        break
-                    } else {
-                        throw Exception("Error de la API: ${categoriesResponse.code()}")
+                    }.awaitAll().filterNotNull()
+
+                    if (isActive) {
+                        DataCacheManager.tvCategories = apiCategoriesWithChannels
+                        DataCacheManager.saveTvCacheToFile(requireContext(), apiCategoriesWithChannels)
+                        DataCacheManager.updateTvSyncTimestamp(requireContext())
+                        prepareAndSubmitList(apiCategoriesWithChannels)
                     }
-                } catch (e: Exception) {
-                    Log.e("TvFragment", "Intento de carga #$attempt falló: ${e.message}")
-                    if (attempt == MAX_RETRIES && !isSilent) {
-                        if (context != null) {
-                            Toast.makeText(context, "No se pudo conectar después de $MAX_RETRIES intentos.", Toast.LENGTH_LONG).show()
-                        }
-                    } else if (attempt < MAX_RETRIES) {
-                        delay(2000L * attempt)
-                    }
+                } else {
+                    Log.e("TvFragment", "Error al cargar categorías: ${categoriesResponse.code()}")
+                    if (isActive && !isSilent) showErrorState("Error al obtener categorías del servidor.")
+                }
+            } catch (e: Exception) {
+                Log.e("TvFragment", "Excepción al cargar datos del servidor", e)
+                if (isActive && !isSilent) showErrorState("No se pudo conectar con el servidor.")
+            } finally {
+                if (isActive && !isSilent) {
+                    binding.progressBarTv.visibility = View.GONE
                 }
             }
-            if (isActive && !isSilent) {
-                binding.progressBarTv.visibility = View.GONE
-                if (!success) showErrorState()
-            }
         }
     }
 
-    private fun showErrorState() {
-        binding.emptyStateLayout.visibility = View.VISIBLE
-        binding.tvEmptyMessage.text = "Error al cargar el contenido."
-        binding.ivEmptyIcon.setImageResource(R.drawable.ic_no_internet)
-        binding.btnRetry.visibility = View.VISIBLE
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        handleScreenOrientation(newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE)
-    }
-
-    private fun handleScreenOrientation(isLandscape: Boolean) {
-        if (_binding == null) return
-        activity?.findViewById<BottomNavigationView>(R.id.bottom_navigation)?.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        binding.appBarLayout.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        binding.listContainer.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        binding.searchViewTv.visibility = if (isLandscape) View.GONE else View.VISIBLE
-        val playerContainer = binding.playerContainer
-        val params = playerContainer.layoutParams as ViewGroup.MarginLayoutParams
-        val contentParent = binding.listContainer.parent as View
-        val contentParams = contentParent.layoutParams as CoordinatorLayout.LayoutParams
-        if (isLandscape) {
-            params.height = ViewGroup.LayoutParams.MATCH_PARENT
-            contentParams.behavior = null
-            hideSystemUi()
-        } else {
-            params.height = resources.getDimensionPixelSize(R.dimen.player_height_portrait)
-            contentParams.behavior = AppBarLayout.ScrollingViewBehavior()
-            showSystemUi()
-        }
-        playerContainer.layoutParams = params
-        contentParent.layoutParams = contentParams
-    }
-
-    private fun hideSystemUi() {
-        activity?.window?.let { window ->
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            WindowInsetsControllerCompat(window, binding.root).let { controller ->
-                controller.hide(WindowInsetsCompat.Type.systemBars())
-                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        }
-    }
-
-    private fun showSystemUi() {
-        activity?.window?.let { window ->
-            WindowCompat.setDecorFitsSystemWindows(window, true)
-            WindowInsetsControllerCompat(window, binding.root).show(WindowInsetsCompat.Type.systemBars())
-        }
+    private fun showErrorState(message: String) {
+        binding.emptyStateLayout.root.visibility = View.VISIBLE
+        binding.emptyStateLayout.tvEmptyMessage.text = message
+        binding.emptyStateLayout.ivEmptyIcon.setImageResource(R.drawable.ic_no_internet)
+        binding.emptyStateLayout.btnRetry.visibility = View.VISIBLE
     }
 
     override fun onStart() {
@@ -370,7 +266,6 @@ class TvFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player?.play()
         currentPlayingStream?.let {
             tvCategoryAdapter.setNowPlaying(it.streamId, it.categoryId)
@@ -379,7 +274,6 @@ class TvFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         player?.pause()
     }
 
@@ -396,6 +290,7 @@ class TvFragment : Fragment() {
             tvCategoryAdapter.setNowPlaying(null, null)
             currentPlayingStream = null
             binding.toolbarTv.title = "TV en Vivo"
+            binding.playerContainer.visibility = View.GONE
         }
     }
 

@@ -3,23 +3,32 @@ package com.kybers.play.adapter
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.kybers.play.R
 import com.kybers.play.api.Series
-import com.kybers.play.databinding.ItemMovieBinding // Reutilizamos el mismo layout de película
+import com.kybers.play.databinding.ItemMovieBinding // Reutilizamos el mismo layout
 
+/**
+ * Adaptador para mostrar una lista de series en un RecyclerView.
+ * Al igual que MoviesAdapter, usa ListAdapter con DiffUtil para un rendimiento óptimo.
+ */
 class SeriesAdapter(
-    private var seriesList: MutableList<Series>, // Cambiado a MutableList
     private val onItemClick: (Series) -> Unit
-) : RecyclerView.Adapter<SeriesAdapter.ViewHolder>() {
+) : ListAdapter<Series, SeriesAdapter.ViewHolder>(SeriesDiffCallback()) {
 
+    /**
+     * ViewHolder que contiene la vista de un solo item de serie.
+     * Reutiliza ItemMovieBinding.
+     */
     inner class ViewHolder(val binding: ItemMovieBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(series: Series) {
             binding.tvMovieTitle.text = series.name
+            // La diferencia principal es que cargamos la imagen desde 'series.cover'
             Glide.with(binding.ivMoviePoster.context)
                 .load(series.cover)
-                .placeholder(R.drawable.ic_series)
+                .placeholder(R.drawable.ic_series) // Usamos un placeholder específico para series
                 .into(binding.ivMoviePoster)
 
             binding.root.setOnClickListener { onItemClick(series) }
@@ -32,39 +41,21 @@ class SeriesAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(seriesList[position])
-    }
-
-    override fun getItemCount() = seriesList.size
-
-    // CORREGIDO: Usamos DiffUtil para actualizaciones eficientes
-    fun updateSeries(newSeriesList: List<Series>) {
-        val diffCallback = SeriesDiffCallback(this.seriesList, newSeriesList)
-        val diffResult = DiffUtil.calculateDiff(diffCallback)
-
-        this.seriesList.clear()
-        this.seriesList.addAll(newSeriesList)
-        diffResult.dispatchUpdatesTo(this)
+        holder.bind(getItem(position))
     }
 }
 
-// Clase para calcular las diferencias entre la lista vieja y la nueva
-class SeriesDiffCallback(
-    private val oldList: List<Series>,
-    private val newList: List<Series>
-) : DiffUtil.Callback() {
-
-    override fun getOldListSize(): Int = oldList.size
-    override fun getNewListSize(): Int = newList.size
-
-    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        // Comparamos por ID, que es único para cada serie
-        return oldList[oldItemPosition].seriesId == newList[newItemPosition].seriesId
+/**
+ * Callback para que DiffUtil calcule las diferencias entre dos listas de series.
+ */
+class SeriesDiffCallback : DiffUtil.ItemCallback<Series>() {
+    override fun areItemsTheSame(oldItem: Series, newItem: Series): Boolean {
+        // Los items son los mismos si sus seriesId son iguales.
+        return oldItem.seriesId == newItem.seriesId
     }
 
-    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        // Comparamos el contenido completo del objeto
-        return oldList[oldItemPosition] == newList[newItemPosition]
+    override fun areContentsTheSame(oldItem: Series, newItem: Series): Boolean {
+        // El contenido es el mismo si los objetos son idénticos.
+        return oldItem == newItem
     }
 }
-

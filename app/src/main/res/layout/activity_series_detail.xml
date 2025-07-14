@@ -7,16 +7,18 @@
     android:background="@color/dark_background"
     tools:context=".ui.series.SeriesDetailActivity">
 
+    <!-- AppBarLayout permite que la barra superior reaccione al scroll -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/app_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="250dp"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
+        <!-- CollapsingToolbarLayout es lo que crea el efecto de colapso -->
         <com.google.android.material.appbar.CollapsingToolbarLayout
             android:id="@+id/collapsing_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="250dp"
+            android:layout_height="match_parent"
             app:contentScrim="@color/dark_surface"
             app:layout_scrollFlags="scroll|exitUntilCollapsed">
 
@@ -28,6 +30,7 @@
                 app:layout_collapseMode="parallax"
                 android:contentDescription="Portada de la serie"/>
 
+            <!-- La Toolbar que se queda visible cuando la imagen se colapsa -->
             <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
@@ -37,6 +40,7 @@
         </com.google.android.material.appbar.CollapsingToolbarLayout>
     </com.google.android.material.appbar.AppBarLayout>
 
+    <!-- Botón flotante para favoritos, anclado a la AppBarLayout -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fab_favorite"
         android:layout_width="wrap_content"
@@ -49,6 +53,7 @@
         app:layout_anchorGravity="bottom|end"
         android:contentDescription="Marcar como favorito"/>
 
+    <!-- Contenido que se desplaza -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
