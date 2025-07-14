@@ -1,27 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/dark_background"
     tools:context=".ui.movies.MoviesFragment">
 
-    <!-- Barra de herramientas con título y buscador -->
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/app_bar_layout_movies"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/dark_surface">
+        android:background="@color/dark_surface"
+        android:fitsSystemWindows="true">
 
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar_movies"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="Películas"
-            app:titleTextColor="@color/light_text"/>
+            app:titleTextColor="@color/light_text"
+            app:layout_scrollFlags="scroll|enterAlways">
 
+            <!-- Botón de Ajustes, similar al de la pestaña de TV -->
+            <ImageButton
+                android:id="@+id/btn_settings_movies"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="end"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Ajustes"
+                android:src="@drawable/ic_settings"
+                app:tint="@color/light_text" />
+
+        </androidx.appcompat.widget.Toolbar>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <!-- Buscador movido fuera del AppBarLayout -->
         <androidx.appcompat.widget.SearchView
             android:id="@+id/search_view_movies"
             android:layout_width="match_parent"
@@ -32,32 +54,31 @@
             app:iconifiedByDefault="false"
             android:theme="@style/ThemeOverlay.AppCompat.Dark" />
 
-    </com.google.android.material.appbar.AppBarLayout>
-
-    <!-- Contenedor para la lista y el estado de carga/vacío -->
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler_view_movies"
+        <!-- Contenedor para la lista y el estado de carga/vacío -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:clipToPadding="false"
-            android:padding="4dp"
-            tools:listitem="@layout/item_tv_category" />
+            android:layout_height="match_parent">
 
-        <ProgressBar
-            android:id="@+id/progress_bar_movies"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:visibility="gone"
-            tools:visibility="visible"/>
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_view_movies"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="4dp"
+                tools:listitem="@layout/item_tv_category" />
 
-        <include
-            android:id="@+id/empty_state_container"
-            layout="@layout/empty_state_layout"/>
+            <ProgressBar
+                android:id="@+id/progress_bar_movies"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:visibility="gone"
+                tools:visibility="visible"/>
 
-    </FrameLayout>
-</LinearLayout>
+            <include
+                android:id="@+id/empty_state_container"
+                layout="@layout/empty_state_layout"/>
+
+        </FrameLayout>
+    </LinearLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

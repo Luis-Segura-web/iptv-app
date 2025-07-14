@@ -103,7 +103,6 @@ class TvFragment : Fragment() {
         binding.recyclerViewTv.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = tvCategoryAdapter
-            // CORREGIDO: Le pasamos la instancia del RecyclerView al constructor de la decoración.
             addItemDecoration(StickyHeaderDecoration(tvCategoryAdapter, this))
         }
     }
@@ -187,10 +186,11 @@ class TvFragment : Fragment() {
         if (context == null || !isAdded) return
         val finalList = mutableListOf<CategoryWithChannels>()
         val favoriteChannels = LiveFavoritesManager.getFavorites(requireContext())
-        if (favoriteChannels.isNotEmpty()) {
-            val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
-            finalList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
-        }
+
+        // CORREGIDO: Siempre añadimos la categoría de Favoritos, incluso si está vacía.
+        val favoritesCategory = Category(categoryId = "favorites", categoryName = "⭐ Favoritos", parentId = 0)
+        finalList.add(CategoryWithChannels(favoritesCategory, favoriteChannels.toMutableList(), isExpanded = true))
+
         finalList.addAll(baseList.filter { it.category.categoryId != "favorites" })
         tvCategoryAdapter.submitList(finalList)
         binding.emptyStateLayout.root.visibility = if (finalList.isEmpty()) View.VISIBLE else View.GONE

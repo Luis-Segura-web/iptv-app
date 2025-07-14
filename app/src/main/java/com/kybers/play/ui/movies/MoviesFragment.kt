@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
@@ -24,6 +25,9 @@ import com.kybers.play.api.XtreamApiService
 import com.kybers.play.databinding.FragmentMoviesBinding
 import com.kybers.play.util.NetworkUtils
 import com.kybers.play.util.StickyHeaderDecoration
+import com.kybers.play.database.AppDatabase
+import com.kybers.play.repository.ContentRepository
+import com.kybers.play.ui.settings.SettingsActivity // Importar SettingsActivity
 import kotlinx.coroutines.launch
 
 class MoviesFragment : Fragment() {
@@ -35,6 +39,7 @@ class MoviesFragment : Fragment() {
     private lateinit var movieCategoryAdapter: MovieCategoryAdapter
     private lateinit var username: String
     private lateinit var password: String
+    private lateinit var repository: ContentRepository
 
     // Lista maestra que mantiene el estado de todas las categorías.
     private val masterCategoryList = mutableListOf<CategoryWithMovies>()
@@ -54,9 +59,19 @@ class MoviesFragment : Fragment() {
 
         if (serverUrl.isNotEmpty()) {
             apiService = RetrofitClient.getClient(serverUrl).create(XtreamApiService::class.java)
+            repository = ContentRepository(apiService, AppDatabase.getDatabase(requireContext()).contentDao())
+
+            setupToolbar() // Llamar a setupToolbar aquí
             setupRecyclerView()
             loadInitialCategories()
             setupSearchView()
+        }
+    }
+
+    // NUEVO: Configuración de la toolbar para el fragmento de Películas
+    private fun setupToolbar() {
+        binding.btnSettingsMovies.setOnClickListener {
+            startActivity(Intent(activity, SettingsActivity::class.java))
         }
     }
 
@@ -70,8 +85,7 @@ class MoviesFragment : Fragment() {
                 }
                 startActivity(intent)
             },
-            // Le pasamos la función que se debe ejecutar cuando se expande una categoría por primera vez.
-            onLoadMoviesForCategory = { categoryItem, position ->
+            onCategoryNeedsLoad = { categoryItem, position ->
                 loadMoviesForCategory(categoryItem, position)
             }
         )
@@ -80,8 +94,9 @@ class MoviesFragment : Fragment() {
         gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
             override fun getSpanSize(position: Int): Int {
                 return when (movieCategoryAdapter.getItemViewType(position)) {
-                    0 -> 3 // TYPE_CATEGORY
-                    1 -> 1 // TYPE_MOVIE
+                    MovieCategoryAdapter.TYPE_CATEGORY -> 3
+                    MovieCategoryAdapter.TYPE_MOVIE -> 1
+                    MovieCategoryAdapter.TYPE_LOADING_PLACEHOLDER -> 3
                     else -> 1
                 }
             }
@@ -94,9 +109,6 @@ class MoviesFragment : Fragment() {
         }
     }
 
-    /**
-     * Carga únicamente la lista de categorías.
-     */
     private fun loadInitialCategories() {
         showLoading(true)
         viewLifecycleOwner.lifecycleScope.launch {
@@ -111,9 +123,8 @@ class MoviesFragment : Fragment() {
                 if (categoriesResponse.isSuccessful) {
                     val categories = categoriesResponse.body() ?: emptyList()
                     if (categories.isNotEmpty()) {
-                        // Creamos la lista maestra, pero sin las películas (movies = null).
                         masterCategoryList.clear()
-                        masterCategoryList.addAll(categories.map { CategoryWithMovies(it) })
+                        masterCategoryList.addAll(categories.map { CategoryWithMovies(it, movies = null) })
                         movieCategoryAdapter.submitList(masterCategoryList)
 
                         binding.recyclerViewMovies.visibility = View.VISIBLE
@@ -133,32 +144,32 @@ class MoviesFragment : Fragment() {
         }
     }
 
-    /**
-     * Se llama desde el adaptador para cargar las películas de una categoría específica.
-     */
     private fun loadMoviesForCategory(categoryItem: CategoryWithMovies, position: Int) {
+        if (!NetworkUtils.isNetworkAvailable(requireContext())) {
+            Toast.makeText(context, "Sin conexión a internet para cargar películas.", Toast.LENGTH_SHORT).show()
+            val masterItem = masterCategoryList.find { it.category.categoryId == categoryItem.category.categoryId }
+            masterItem?.isLoading = false
+            movieCategoryAdapter.onCategoryLoaded(categoryItem.category.categoryId, emptyList())
+            return
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             try {
+                Log.d("MoviesFragment", "Cargando películas para la categoría: ${categoryItem.category.categoryName}")
                 val moviesResponse = apiService.getVodStreams(username, password, categoryId = categoryItem.category.categoryId)
                 if (moviesResponse.isSuccessful) {
                     val movies = moviesResponse.body() ?: emptyList()
-                    // Actualizamos el item en nuestra lista maestra con las películas cargadas.
-                    val masterItem = masterCategoryList.find { it.category.categoryId == categoryItem.category.categoryId }
-                    masterItem?.let {
-                        it.movies = movies
-                        it.isLoading = false
-                    }
-                    // Notificamos al adaptador que los datos han cambiado.
-                    movieCategoryAdapter.onCategoryLoaded(position, movies)
+                    Log.d("MoviesFragment", "Películas cargadas para ${categoryItem.category.categoryName}: ${movies.size} items.")
+
+                    movieCategoryAdapter.onCategoryLoaded(categoryItem.category.categoryId, movies)
                 } else {
-                    Log.e("MoviesFragment", "Error al cargar películas para cat ${categoryItem.category.categoryId}")
-                    categoryItem.isLoading = false
-                    movieCategoryAdapter.notifyItemChanged(position)
+                    Log.e("MoviesFragment", "Error al cargar películas para cat ${categoryItem.category.categoryId}: ${moviesResponse.code()}")
+                    movieCategoryAdapter.onCategoryLoaded(categoryItem.category.categoryId, emptyList())
                 }
             } catch (e: Exception) {
                 Log.e("MoviesFragment", "Excepción al cargar películas para cat ${categoryItem.category.categoryId}", e)
-                categoryItem.isLoading = false
-                movieCategoryAdapter.notifyItemChanged(position)
+                Toast.makeText(context, "Error al cargar películas para ${categoryItem.category.categoryName}", Toast.LENGTH_SHORT).show()
+                movieCategoryAdapter.onCategoryLoaded(categoryItem.category.categoryId, emptyList())
             }
         }
     }
@@ -167,7 +178,10 @@ class MoviesFragment : Fragment() {
         binding.searchViewMovies.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean = false
             override fun onQueryTextChange(newText: String?): Boolean {
-                movieCategoryAdapter.filter(newText, masterCategoryList)
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val allMovies = repository.getMovies(username, password)
+                    movieCategoryAdapter.filter(newText, allMovies)
+                }
                 return true
             }
         })
@@ -183,6 +197,7 @@ class MoviesFragment : Fragment() {
 
     private fun showEmptyState(message: String) {
         binding.recyclerViewMovies.visibility = View.GONE
+        binding.progressBarMovies.visibility = View.GONE
         binding.emptyStateContainer.root.visibility = View.VISIBLE
         binding.emptyStateContainer.tvEmptyMessage.text = message
         binding.emptyStateContainer.ivEmptyIcon.setImageResource(R.drawable.ic_movie)
