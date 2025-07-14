@@ -8,12 +8,12 @@ plugins {
 android {
     // Namespace único para tu aplicación, evita conflictos.
     namespace = "com.kybers.play"
-    compileSdk = 34 // Usamos el SDK de Android 14
+    compileSdk = 36 // Usamos el SDK de Android 14
 
     defaultConfig {
         applicationId = "com.kybers.play"
         minSdk = 24 // Mínima versión de Android soportada (Android 7.0)
-        targetSdk = 34 // Versión objetivo, debe coincidir con compileSdk
+        targetSdk = 36 // Versión objetivo, debe coincidir con compileSdk
         versionCode = 1
         versionName = "1.0"
 
